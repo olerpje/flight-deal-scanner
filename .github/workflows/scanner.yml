@@ -1,9 +1,9 @@
-name: ✈️ Flight Deal Scanner
+name: Flight Deal Scanner
 
 on:
   schedule:
-    - cron: '0 */2 * * *'  # Every 2 hours
-  workflow_dispatch:        # Allows manual trigger from GitHub UI (for testing)
+    - cron: '0 */2 * * *'
+  workflow_dispatch:
 
 jobs:
   scan:
@@ -19,7 +19,7 @@ jobs:
         with:
           node-version: '24'
 
-       - name: Install dependencies
+      - name: Install dependencies
         run: npm install --no-package-lock
 
       - name: Run flight scanner
@@ -31,6 +31,4 @@ jobs:
           GMAIL_USER: ${{ secrets.GMAIL_USER }}
           GMAIL_APP_PASSWORD: ${{ secrets.GMAIL_APP_PASSWORD }}
           ALERT_EMAIL: ${{ secrets.ALERT_EMAIL }}
-          BEEHIIV_API_KEY: ${{ secrets.BEEHIIV_API_KEY }}
-          BEEHIIV_PUBLICATION_ID: ${{ secrets.BEEHIIV_PUBLICATION_ID }}
         run: node run-once.js
