@@ -12,7 +12,7 @@ dotenv.config();
 // ─── CONFIG ──────────────────────────────────────────────────────────────────
 
 const CONFIG = {
-  priceThresholdEur: 55,
+discountThreshold: 0.30, // alert if 30% below average
   origins: ["AMS", "EIN", "BRU", "CRL", "FRA", "DUS", "CGN"],
   destinations: ["ATH", "SKG", "HER", "FCO", "NAP", "PMO", "BCN", "MAD", "AGP", "LIS"],
   baselines: {
