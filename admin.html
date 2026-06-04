@@ -1,0 +1,313 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Flight Scanner Admin</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    background: #0a0a0f;
+    color: #e8e4d9;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    min-height: 100vh;
+    padding: 24px 16px 48px;
+  }
+  .header { max-width: 520px; margin: 0 auto 24px; }
+  .label-top { font-size: 10px; letter-spacing: 0.3em; color: #00c2a8; text-transform: uppercase; margin-bottom: 6px; }
+  h1 { font-size: 26px; font-weight: 700; color: #e8e4d9; }
+  .subtitle { font-size: 13px; color: #5a6474; margin-top: 6px; }
+  .card { background: #0d0d14; border: 1px solid #1e2030; border-radius: 14px; padding: 20px; max-width: 520px; margin: 0 auto 16px; }
+  .card-title { font-size: 11px; letter-spacing: 0.2em; color: #4a5568; text-transform: uppercase; margin-bottom: 16px; }
+  .field { margin-bottom: 16px; }
+  .field:last-child { margin-bottom: 0; }
+  .field label { display: block; font-size: 13px; color: #8892a4; margin-bottom: 8px; }
+  input[type="text"], input[type="password"] {
+    width: 100%; background: #060609; border: 1px solid #1e2030; border-radius: 8px;
+    padding: 12px 14px; color: #e8e4d9; font-size: 14px; outline: none; transition: border-color 0.15s;
+  }
+  input[type="text"]:focus, input[type="password"]:focus { border-color: #00c2a8; }
+  input[type="range"] { width: 100%; accent-color: #00c2a8; margin: 4px 0; }
+  .range-labels { display: flex; justify-content: space-between; font-size: 11px; color: #4a5568; margin-top: 4px; }
+  .months-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
+  .month-btn {
+    background: #060609; border: 1px solid #1e2030; border-radius: 8px;
+    padding: 12px 4px; color: #5a6474; font-size: 13px; cursor: pointer;
+    text-align: center; transition: all 0.15s; -webkit-tap-highlight-color: transparent;
+  }
+  .month-btn.active { background: #00c2a820; border-color: #00c2a8; color: #00c2a8; font-weight: 600; }
+  .origins-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px; }
+  .origin-btn {
+    background: #060609; border: 1px solid #1e2030; border-radius: 8px;
+    padding: 10px 8px; color: #5a6474; font-size: 12px; cursor: pointer;
+    text-align: center; transition: all 0.15s; -webkit-tap-highlight-color: transparent;
+  }
+  .origin-btn.active { background: #7c6ff720; border-color: #7c6ff7; color: #7c6ff7; font-weight: 600; }
+  .discount-display { font-size: 36px; font-weight: 700; color: #00c2a8; text-align: center; margin: 8px 0 4px; }
+  .discount-sub { font-size: 12px; color: #5a6474; text-align: center; margin-bottom: 14px; }
+  .days-row { display: flex; align-items: center; gap: 12px; margin-bottom: 14px; }
+  .days-row label { font-size: 13px; color: #8892a4; min-width: 72px; }
+  .days-row input[type="range"] { flex: 1; }
+  .days-val { font-size: 18px; font-weight: 700; color: #00c2a8; min-width: 28px; text-align: right; }
+  .save-btn {
+    width: 100%; max-width: 520px; margin: 0 auto; display: block;
+    background: #00c2a8; color: #000; border: none; border-radius: 12px;
+    padding: 16px; font-size: 16px; font-weight: 700; cursor: pointer;
+    transition: opacity 0.15s; -webkit-tap-highlight-color: transparent;
+  }
+  .save-btn:active { opacity: 0.8; }
+  .save-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+  .status {
+    max-width: 520px; margin: 12px auto 0; padding: 12px 16px;
+    border-radius: 8px; font-size: 13px; text-align: center; display: none;
+  }
+  .status.success { background: #00c2a820; border: 1px solid #00c2a8; color: #00c2a8; display: block; }
+  .status.error { background: #ec489920; border: 1px solid #ec4899; color: #ec4899; display: block; }
+  .status.loading { background: #7c6ff720; border: 1px solid #7c6ff7; color: #7c6ff7; display: block; }
+  .hint { font-size: 11px; color: #4a5568; margin-top: 10px; line-height: 1.6; }
+  pre.output {
+    max-width: 520px; margin: 12px auto 0; padding: 14px 16px;
+    background: #060609; border: 1px solid #1e2030; border-radius: 10px;
+    font-size: 12px; color: #5a6474; font-family: monospace;
+    white-space: pre-wrap; word-break: break-all; display: none;
+  }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <div class="label-top">Flight Scanner</div>
+  <h1>Admin Panel</h1>
+  <p class="subtitle">Changes apply on the next scanner run (every 2h)</p>
+</div>
+
+<div class="card">
+  <div class="card-title">GitHub Setup (one-time)</div>
+  <div class="field">
+    <label>Personal Access Token</label>
+    <input type="password" id="gh-token" placeholder="github_pat_..." autocomplete="off">
+  </div>
+  <div class="field">
+    <label>GitHub Username</label>
+    <input type="text" id="gh-user" placeholder="olerpje" autocomplete="off">
+  </div>
+  <div class="field">
+    <label>Repository Name</label>
+    <input type="text" id="gh-repo" placeholder="flight-deal-scanner" autocomplete="off">
+  </div>
+  <div class="hint">
+    Generate token at: github.com → Settings → Developer settings → Personal access tokens → Fine-grained tokens → New token → Repository access: only this repo → Permissions → Contents: Read and Write. Your token is saved in your browser only, never sent anywhere except GitHub.
+  </div>
+</div>
+
+<div class="card">
+  <div class="card-title">Active Months</div>
+  <div class="months-grid" id="months-grid"></div>
+</div>
+
+<div class="card">
+  <div class="card-title">Trip Duration</div>
+  <div class="days-row">
+    <label>Min days</label>
+    <input type="range" id="min-days" min="2" max="14" value="4">
+    <div class="days-val" id="min-days-val">4</div>
+  </div>
+  <div class="days-row">
+    <label>Max days</label>
+    <input type="range" id="max-days" min="3" max="21" value="9">
+    <div class="days-val" id="max-days-val">9</div>
+  </div>
+</div>
+
+<div class="card">
+  <div class="card-title">Minimum Discount</div>
+  <div class="discount-display" id="discount-display">30%</div>
+  <div class="discount-sub">Only alert when price is at least this % below average</div>
+  <input type="range" id="discount" min="10" max="70" value="30" step="5">
+  <div class="range-labels"><span>10% (more alerts)</span><span>70% (error fares only)</span></div>
+</div>
+
+<div class="card">
+  <div class="card-title">Departure Airports</div>
+  <div class="origins-grid" id="origins-grid"></div>
+</div>
+
+<button class="save-btn" id="save-btn" onclick="saveSettings()">Save Settings</button>
+<div class="status" id="status"></div>
+<pre class="output" id="output"></pre>
+
+<script>
+const MONTHS = [
+  {num:1,name:"Jan"},{num:2,name:"Feb"},{num:3,name:"Mar"},{num:4,name:"Apr"},
+  {num:5,name:"May"},{num:6,name:"Jun"},{num:7,name:"Jul"},{num:8,name:"Aug"},
+  {num:9,name:"Sep"},{num:10,name:"Oct"},{num:11,name:"Nov"},{num:12,name:"Dec"},
+];
+
+const ORIGINS = [
+  {code:"AMS",label:"NL  AMS Amsterdam"},
+  {code:"EIN",label:"NL  EIN Eindhoven"},
+  {code:"BRU",label:"BE  BRU Brussels"},
+  {code:"CRL",label:"BE  CRL Charleroi"},
+  {code:"FRA",label:"DE  FRA Frankfurt"},
+  {code:"DUS",label:"DE  DUS Dusseldorf"},
+  {code:"CGN",label:"DE  CGN Cologne"},
+];
+
+let selectedMonths = [6,7,8];
+let selectedOrigins = ["AMS","BRU","FRA"];
+
+function loadLocal() {
+  try {
+    const s = JSON.parse(localStorage.getItem("fss") || "{}");
+    if (s.months) selectedMonths = s.months;
+    if (s.origins) selectedOrigins = s.origins;
+    if (s.minDays) document.getElementById("min-days").value = s.minDays;
+    if (s.maxDays) document.getElementById("max-days").value = s.maxDays;
+    if (s.discountThreshold) document.getElementById("discount").value = Math.round(s.discountThreshold * 100);
+  } catch(e) {}
+  const t = localStorage.getItem("ght");
+  const u = localStorage.getItem("ghu");
+  const r = localStorage.getItem("ghr");
+  if (t) document.getElementById("gh-token").value = t;
+  if (u) document.getElementById("gh-user").value = u;
+  if (r) document.getElementById("gh-repo").value = r;
+}
+
+function buildMonths() {
+  document.getElementById("months-grid").innerHTML = MONTHS.map(m =>
+    `<button class="month-btn ${selectedMonths.includes(m.num)?"active":""}" onclick="toggleMonth(${m.num},this)">${m.name}</button>`
+  ).join("");
+}
+
+function buildOrigins() {
+  document.getElementById("origins-grid").innerHTML = ORIGINS.map(o =>
+    `<button class="origin-btn ${selectedOrigins.includes(o.code)?"active":""}" onclick="toggleOrigin('${o.code}',this)">${o.label}</button>`
+  ).join("");
+}
+
+function toggleMonth(num, el) {
+  if (selectedMonths.includes(num)) {
+    if (selectedMonths.length === 1) return;
+    selectedMonths = selectedMonths.filter(m => m !== num);
+    el.classList.remove("active");
+  } else {
+    selectedMonths.push(num);
+    el.classList.add("active");
+  }
+}
+
+function toggleOrigin(code, el) {
+  if (selectedOrigins.includes(code)) {
+    if (selectedOrigins.length === 1) return;
+    selectedOrigins = selectedOrigins.filter(o => o !== code);
+    el.classList.remove("active");
+  } else {
+    selectedOrigins.push(code);
+    el.classList.add("active");
+  }
+}
+
+document.getElementById("min-days").addEventListener("input", function() {
+  const v = parseInt(this.value);
+  const mx = document.getElementById("max-days");
+  if (v >= parseInt(mx.value)) mx.value = v + 1;
+  document.getElementById("min-days-val").textContent = v;
+  document.getElementById("max-days-val").textContent = mx.value;
+});
+
+document.getElementById("max-days").addEventListener("input", function() {
+  const v = parseInt(this.value);
+  const mn = document.getElementById("min-days");
+  if (v <= parseInt(mn.value)) mn.value = v - 1;
+  document.getElementById("max-days-val").textContent = v;
+  document.getElementById("min-days-val").textContent = mn.value;
+});
+
+document.getElementById("discount").addEventListener("input", function() {
+  document.getElementById("discount-display").textContent = this.value + "%";
+});
+
+function getSettings() {
+  return {
+    months: selectedMonths.sort((a,b)=>a-b),
+    minDays: parseInt(document.getElementById("min-days").value),
+    maxDays: parseInt(document.getElementById("max-days").value),
+    discountThreshold: parseInt(document.getElementById("discount").value) / 100,
+    origins: selectedOrigins,
+    updatedAt: new Date().toISOString(),
+  };
+}
+
+function setStatus(msg, type) {
+  const el = document.getElementById("status");
+  el.textContent = msg;
+  el.className = "status " + type;
+}
+
+async function saveSettings() {
+  const token = document.getElementById("gh-token").value.trim();
+  const user = document.getElementById("gh-user").value.trim();
+  const repo = document.getElementById("gh-repo").value.trim();
+
+  if (!token || !user || !repo) {
+    setStatus("Please fill in your GitHub token, username and repo name.", "error");
+    return;
+  }
+
+  localStorage.setItem("ght", token);
+  localStorage.setItem("ghu", user);
+  localStorage.setItem("ghr", repo);
+
+  const settings = getSettings();
+  localStorage.setItem("fss", JSON.stringify(settings));
+
+  document.getElementById("save-btn").disabled = true;
+  setStatus("Saving to GitHub...", "loading");
+
+  try {
+    let sha = null;
+    const checkRes = await fetch(
+      `https://api.github.com/repos/${user}/${repo}/contents/settings.json`,
+      { headers: { Authorization: `Bearer ${token}`, Accept: "application/vnd.github+json" } }
+    );
+    if (checkRes.ok) {
+      sha = (await checkRes.json()).sha;
+    }
+
+    const content = btoa(unescape(encodeURIComponent(JSON.stringify(settings, null, 2))));
+    const body = { message: `Update scanner settings ${new Date().toLocaleString()}`, content, ...(sha ? {sha} : {}) };
+
+    const saveRes = await fetch(
+      `https://api.github.com/repos/${user}/${repo}/contents/settings.json`,
+      {
+        method: "PUT",
+        headers: { Authorization: `Bearer ${token}`, Accept: "application/vnd.github+json", "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      }
+    );
+
+    if (saveRes.ok) {
+      setStatus("Settings saved! Scanner will use these on the next run.", "success");
+      const out = document.getElementById("output");
+      out.style.display = "block";
+      out.textContent = JSON.stringify(settings, null, 2);
+    } else {
+      const err = await saveRes.json();
+      setStatus("GitHub error: " + err.message, "error");
+    }
+  } catch (err) {
+    setStatus("Error: " + err.message, "error");
+  } finally {
+    document.getElementById("save-btn").disabled = false;
+  }
+}
+
+loadLocal();
+buildMonths();
+buildOrigins();
+document.getElementById("discount-display").textContent = document.getElementById("discount").value + "%";
+document.getElementById("min-days-val").textContent = document.getElementById("min-days").value;
+document.getElementById("max-days-val").textContent = document.getElementById("max-days").value;
+</script>
+</body>
+</html>
