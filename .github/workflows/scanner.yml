@@ -19,8 +19,8 @@ jobs:
         with:
           node-version: '24'
 
-      - name: Install dependencies
-        run: npm install
+       - name: Install dependencies
+        run: npm install --no-package-lock
 
       - name: Run flight scanner
         env:
