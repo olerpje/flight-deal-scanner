@@ -205,7 +205,7 @@ async function sendEmail(deal, ai) {
 
 async function main() {
   console.log(`\n✈️  Flight Deal Scanner — ${new Date().toISOString()}`);
-  console.log(`   Threshold: €${CONFIG.priceThresholdEur}`);
+console.log(`   Threshold: ${CONFIG.discountThreshold * 100}% below average`);
   console.log(`   Origins: ${CONFIG.origins.join(", ")}\n`);
 
   const allDeals = [];
