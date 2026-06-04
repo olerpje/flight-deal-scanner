@@ -12,7 +12,7 @@ dotenv.config();
 // ─── CONFIG ──────────────────────────────────────────────────────────────────
 
 const CONFIG = {
-  priceThresholdEur: 55,
+  priceThresholdEur: 250,
   origins: ["AMS", "EIN", "BRU", "CRL", "FRA", "DUS", "CGN"],
   destinations: ["ATH", "SKG", "HER", "FCO", "NAP", "PMO", "BCN", "MAD", "AGP", "LIS"],
   baselines: {
@@ -44,45 +44,44 @@ const mailer = nodemailer.createTransport({
 // ─── FETCH CHEAP FLIGHTS ─────────────────────────────────────────────────────
 
 async function fetchCheapFlights(origin) {
-  const url = new URL("https://api.travelpayouts.com/v1/prices/cheap");
-  url.searchParams.set("token", process.env.TRAVELPAYOUTS_TOKEN);
-  url.searchParams.set("origin", origin);
-  url.searchParams.set("destination", CONFIG.destinations.join(","));
-  url.searchParams.set("currency", "eur");
-  url.searchParams.set("page", "1");
+  const deals = [];
 
-  try {
-    const res = await fetch(url.toString());
-    const json = await res.json();
-    if (!json.success) {
-      console.log(`[${origin}] API returned success:false`);
-      return [];
-    }
+  for (const destination of CONFIG.destinations) {
+    const url = new URL("https://api.travelpayouts.com/v1/prices/cheap");
+    url.searchParams.set("token", process.env.TRAVELPAYOUTS_TOKEN);
+    url.searchParams.set("origin", origin);
+    url.searchParams.set("destination", destination);
+    url.searchParams.set("currency", "eur");
+    url.searchParams.set("page", "1");
 
-    const deals = [];
-    for (const [dest, data] of Object.entries(json.data || {})) {
-      for (const [, flight] of Object.entries(data)) {
-        if (flight.price <= CONFIG.priceThresholdEur) {
-          deals.push({
-            origin,
-            destination: dest,
-            price: flight.price,
-            departDate: flight.departure_at,
-            returnDate: flight.return_at,
-            airline: flight.airline,
-            transfers: flight.transfers,
-            link: flight.link,
-          });
+    try {
+      const res = await fetch(url.toString());
+      const json = await res.json();
+
+      if (!json.success) {
+        console.log(`  [${origin}→${destination}] success:false`);
+        continue;
+      }
+
+      for (const [dest, data] of Object.entries(json.data || {})) {
+        for (const [, flight] of Object.entries(data)) {
+          console.log(`  [${origin}→${dest}] €${flight.price}`);
+          if (flight.price <= CONFIG.priceThresholdEur) {
+            deals.push({
+              origin, destination: dest, price: flight.price,
+              departDate: flight.departure_at, returnDate: flight.return_at,
+              airline: flight.airline, transfers: flight.transfers,
+            });
+          }
         }
       }
+    } catch (err) {
+      console.error(`  [${origin}→${destination}] Error:`, err.message);
     }
-    return deals;
-  } catch (err) {
-    console.error(`[${origin}] Fetch error:`, err.message);
-    return [];
+    await new Promise((r) => setTimeout(r, 300));
   }
+  return deals;
 }
-
 // ─── AI DEAL VALIDATION ──────────────────────────────────────────────────────
 
 async function validateWithClaude(deal) {
