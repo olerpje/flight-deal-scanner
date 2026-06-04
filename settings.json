@@ -1,0 +1,20 @@
+{
+  "months": [
+    6,
+    7,
+    8
+  ],
+  "minDays": 4,
+  "maxDays": 9,
+  "discountThreshold": 0.5,
+  "origins": [
+    "AMS",
+    "EIN",
+    "CRL",
+    "BRU",
+    "FRA",
+    "DUS",
+    "CGN"
+  ],
+  "updatedAt": "2026-06-04T20:45:16.359Z"
+}
