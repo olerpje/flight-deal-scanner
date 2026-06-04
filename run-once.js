@@ -201,6 +201,52 @@ async function sendEmail(deal, ai) {
   console.log(`[EMAIL ✓] ${deal.origin}→${deal.destination} €${deal.price}`);
 }
 
+async function sendDigestEmail(confirmedDeals) {
+  const rows = confirmedDeals.map(({ deal, ai }) => {
+    const emoji = ai.score >= 9 ? "🔥" : "⭐";
+    return `
+      <tr>
+        <td style="padding:12px;border-bottom:1px solid #1e2030;color:#fff;font-weight:bold">${deal.origin} → ${deal.destination}</td>
+        <td style="padding:12px;border-bottom:1px solid #1e2030;color:#00c2a8;font-weight:bold;font-size:18px">€${deal.price}</td>
+        <td style="padding:12px;border-bottom:1px solid #1e2030;color:#e8e4d9">${emoji} ${ai.label}</td>
+        <td style="padding:12px;border-bottom:1px solid #1e2030;color:#8892a4;font-size:12px">${deal.departDate?.slice(0,10)}</td>
+        <td style="padding:12px;border-bottom:1px solid #1e2030">
+          <a href="https://www.skyscanner.net/transport/flights/${deal.origin.toLowerCase()}/${deal.destination.toLowerCase()}/" 
+             style="background:#00c2a8;color:#000;padding:6px 12px;border-radius:6px;text-decoration:none;font-weight:bold;font-size:12px">Book →</a>
+        </td>
+      </tr>`;
+  }).join("");
+
+  const html = `
+<!DOCTYPE html><html><body style="margin:0;padding:0;background:#0a0a0f;font-family:Georgia,serif">
+<div style="max-width:700px;margin:0 auto;padding:32px 24px">
+  <div style="font-size:11px;letter-spacing:0.3em;color:#00c2a8;text-transform:uppercase;margin-bottom:8px">Flight Deal Scanner</div>
+  <h1 style="font-size:28px;color:#e8e4d9;margin:0 0 4px">✈️ ${confirmedDeals.length} Deal${confirmedDeals.length > 1 ? "s" : ""} Found</h1>
+  <p style="color:#8892a4;font-size:13px;margin:0 0 24px">${new Date().toUTCString()}</p>
+  <table style="width:100%;border-collapse:collapse;background:#0d1117;border:1px solid #1e2030;border-radius:12px;overflow:hidden">
+    <thead>
+      <tr style="background:#0f1420">
+        <th style="padding:12px;text-align:left;color:#4a5568;font-size:11px;text-transform:uppercase;letter-spacing:0.1em">Route</th>
+        <th style="padding:12px;text-align:left;color:#4a5568;font-size:11px;text-transform:uppercase;letter-spacing:0.1em">Price</th>
+        <th style="padding:12px;text-align:left;color:#4a5568;font-size:11px;text-transform:uppercase;letter-spacing:0.1em">Rating</th>
+        <th style="padding:12px;text-align:left;color:#4a5568;font-size:11px;text-transform:uppercase;letter-spacing:0.1em">Date</th>
+        <th style="padding:12px;text-align:left;color:#4a5568;font-size:11px;text-transform:uppercase;letter-spacing:0.1em">Book</th>
+      </tr>
+    </thead>
+    <tbody>${rows}</tbody>
+  </table>
+  <div style="color:#4a5568;font-size:11px;text-align:center;margin-top:24px">Flight Deal Scanner · GitHub Actions · Every 2 hours</div>
+</div></body></html>`;
+
+  await mailer.sendMail({
+    from: `"✈️ Flight Deals" <${process.env.GMAIL_USER}>`,
+    to: process.env.ALERT_EMAIL,
+    subject: `✈️ ${confirmedDeals.length} flight deal${confirmedDeals.length > 1 ? "s" : ""} found — ${new Date().toLocaleDateString()}`,
+    html,
+  });
+
+  console.log(`[EMAIL DIGEST ✓] Sent ${confirmedDeals.length} deals in one email`);
+}
 // ─── MAIN ─────────────────────────────────────────────────────────────────────
 
 async function main() {
@@ -228,6 +274,7 @@ console.log(`   Threshold: ${CONFIG.discountThreshold * 100}% below average`);
   console.log("   Running AI filter...\n");
 
   let alertsSent = 0;
+const confirmedDeals = [];
   for (const deal of allDeals) {
     const ai = await validateWithClaude(deal);
     const emoji = ai.isDeal ? (ai.score >= 9 ? "🔥" : "⭐") : "✗";
@@ -235,13 +282,16 @@ console.log(`   Threshold: ${CONFIG.discountThreshold * 100}% below average`);
 
     if (ai.isDeal) {
       await sendTelegram(deal, ai);
-      await sendEmail(deal, ai);
+      confirmedDeals.push({ deal, ai });
       alertsSent++;
     }
 
     await new Promise((r) => setTimeout(r, 400));
   }
 
+if (confirmedDeals.length > 0) {
+    await sendDigestEmail(confirmedDeals);
+  }
   console.log(`\n✅ Done. ${alertsSent} alert(s) sent.\n`);
   process.exit(0);
 }
