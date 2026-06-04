@@ -66,7 +66,9 @@ async function fetchCheapFlights(origin) {
       for (const [dest, data] of Object.entries(json.data || {})) {
         for (const [, flight] of Object.entries(data)) {
           console.log(`  [${origin}→${dest}] €${flight.price}`);
-          if (flight.price <= CONFIG.priceThresholdEur) {
+const routeKey = `${origin}-${dest}`;
+const baseline = CONFIG.baselines[routeKey] || CONFIG.baselines.DEFAULT;
+if (flight.price <= baseline * (1 - CONFIG.discountThreshold)) {
             deals.push({
               origin, destination: dest, price: flight.price,
               departDate: flight.departure_at, returnDate: flight.return_at,
