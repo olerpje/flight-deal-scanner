@@ -150,7 +150,7 @@ const mailer = nodemailer.createTransport({
 
 async function getSubscribers() {
   try {
-    const rows = await supabase("GET", "subscribers", null, { "active": "eq.true" });
+    const rows = await supabase("GET", "subscribers", null, { active: "eq.true" });
     return rows || [];
   } catch (e) {
     console.error("Failed to fetch subscribers:", e.message);
