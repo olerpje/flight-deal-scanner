@@ -1,111 +1,131 @@
 /**
- * run-once.js
- * Single-execution version of the scanner — used by GitHub Actions.
- * GitHub handles the scheduling; this just runs the scan and exits.
+ * run-once.js — Flight Deal Scanner
+ * Reads settings from settings.json in the repo (set via admin.html)
  */
 
 import fetch from "node-fetch";
 import nodemailer from "nodemailer";
+import fs from "fs";
 import dotenv from "dotenv";
 dotenv.config();
 
-// ─── CONFIG ──────────────────────────────────────────────────────────────────
+// ─── DEFAULT CONFIG (overridden by settings.json if present) ─────────────────
 
-const CONFIG = {
-  discountThreshold: 0.30, // alert if 30%+ below average
+const DEFAULTS = {
+  months: [6, 7, 8],
+  minDays: 4,
+  maxDays: 9,
+  discountThreshold: 0.30,
   origins: ["AMS", "EIN", "BRU", "CRL", "FRA", "DUS", "CGN"],
-  destinations: ["ATH", "SKG", "HER", "FCO", "NAP", "PMO", "BCN", "MAD", "AGP", "LIS"],
-  baselines: {
-    "AMS-ATH": 110, "AMS-BCN": 90,  "AMS-FCO": 95,  "AMS-MAD": 85,
-    "AMS-LIS": 95,  "AMS-NAP": 100, "AMS-PMO": 105, "AMS-HER": 115,
-    "AMS-SKG": 110, "AMS-AGP": 90,
-    "BRU-ATH": 115, "BRU-BCN": 85,  "BRU-FCO": 90,  "BRU-MAD": 80,
-    "BRU-LIS": 90,  "BRU-NAP": 95,  "BRU-HER": 110,
-    "FRA-ATH": 120, "FRA-BCN": 95,  "FRA-FCO": 85,  "FRA-MAD": 90,
-    "FRA-LIS": 100, "FRA-NAP": 90,
-    "DUS-ATH": 115, "DUS-BCN": 88,  "DUS-FCO": 88,  "DUS-MAD": 85,
-    "CGN-ATH": 110, "CGN-BCN": 85,  "CGN-FCO": 85,
-    "EIN-ATH": 105, "EIN-BCN": 80,  "EIN-MAD": 78,  "EIN-FCO": 90,
-    "CRL-ATH": 105, "CRL-BCN": 75,  "CRL-MAD": 72,  "CRL-FCO": 85,
-    DEFAULT: 100,
-  },
 };
+
+const DESTINATIONS = ["ATH", "SKG", "HER", "FCO", "NAP", "PMO", "BCN", "MAD", "AGP", "LIS"];
+
+const BASELINES = {
+  "AMS-ATH": 110, "AMS-BCN": 90,  "AMS-FCO": 95,  "AMS-MAD": 85,
+  "AMS-LIS": 95,  "AMS-NAP": 100, "AMS-PMO": 105, "AMS-HER": 115,
+  "AMS-SKG": 110, "AMS-AGP": 90,
+  "BRU-ATH": 115, "BRU-BCN": 65,  "BRU-FCO": 90,  "BRU-MAD": 80,
+  "BRU-LIS": 90,  "BRU-NAP": 95,  "BRU-HER": 110,
+  "FRA-ATH": 120, "FRA-BCN": 95,  "FRA-FCO": 85,  "FRA-MAD": 90,
+  "FRA-LIS": 100, "FRA-NAP": 90,
+  "DUS-ATH": 115, "DUS-BCN": 88,  "DUS-FCO": 88,  "DUS-MAD": 85,
+  "CGN-ATH": 110, "CGN-BCN": 85,  "CGN-FCO": 85,
+  "EIN-ATH": 105, "EIN-BCN": 80,  "EIN-MAD": 78,  "EIN-FCO": 90,
+  "CRL-ATH": 105, "CRL-BCN": 60,  "CRL-MAD": 72,  "CRL-FCO": 85,
+  DEFAULT: 100,
+};
+
+// ─── LOAD SETTINGS ────────────────────────────────────────────────────────────
+
+function loadSettings() {
+  try {
+    if (fs.existsSync("settings.json")) {
+      const s = JSON.parse(fs.readFileSync("settings.json", "utf8"));
+      console.log("   Settings loaded from settings.json");
+      return { ...DEFAULTS, ...s };
+    }
+  } catch (e) {
+    console.log("   Could not read settings.json, using defaults");
+  }
+  console.log("   Using default settings");
+  return { ...DEFAULTS };
+}
 
 // ─── HELPERS ─────────────────────────────────────────────────────────────────
 
-// Convert "2026-06-23T08:45:00+02:00" → "260623" for Skyscanner URLs
-function toSkyscannerDate(dateStr) {
-  if (!dateStr) return null;
-  const d = new Date(dateStr);
-  const yy = String(d.getFullYear()).slice(2);
-  const mm = String(d.getMonth() + 1).padStart(2, "0");
-  const dd = String(d.getDate()).padStart(2, "0");
-  return `${yy}${mm}${dd}`;
+function buildBookingUrl(origin, destination, departDate, returnDate) {
+  const dep = departDate ? new Date(departDate).toISOString().slice(0, 10) : null;
+  const ret = returnDate ? new Date(returnDate).toISOString().slice(0, 10) : null;
+  if (dep && ret) {
+    return `https://www.google.com/travel/flights?q=Flights+from+${origin}+to+${destination}+on+${dep}+returning+${ret}`;
+  } else if (dep) {
+    return `https://www.google.com/travel/flights?q=Flights+from+${origin}+to+${destination}+on+${dep}`;
+  }
+  return `https://www.google.com/travel/flights?q=Flights+from+${origin}+to+${destination}`;
 }
 
-function buildBookingUrl(deal) {
-  const orig = deal.origin.toLowerCase();
-  const dest = deal.destination.toLowerCase();
-  const dep = toSkyscannerDate(deal.departDate);
-  const ret = toSkyscannerDate(deal.returnDate);
-  if (dep && ret) {
-    return `https://www.skyscanner.net/transport/flights/${orig}/${dest}/${dep}/${ret}/`;
-  } else if (dep) {
-    return `https://www.skyscanner.net/transport/flights/${orig}/${dest}/${dep}/`;
-  }
-  return `https://www.skyscanner.net/transport/flights/${orig}/${dest}/`;
+function daysBetween(date1, date2) {
+  if (!date1 || !date2) return null;
+  const d1 = new Date(date1);
+  const d2 = new Date(date2);
+  return Math.round(Math.abs(d2 - d1) / (1000 * 60 * 60 * 24));
 }
 
 // ─── EMAIL SETUP ─────────────────────────────────────────────────────────────
 
 const mailer = nodemailer.createTransport({
   service: "gmail",
-  auth: {
-    user: process.env.GMAIL_USER,
-    pass: process.env.GMAIL_APP_PASSWORD,
-  },
+  auth: { user: process.env.GMAIL_USER, pass: process.env.GMAIL_APP_PASSWORD },
 });
 
 // ─── FETCH CHEAP FLIGHTS ─────────────────────────────────────────────────────
 
-async function fetchCheapFlights(origin) {
+async function fetchCheapFlights(origin, settings) {
   const deals = [];
 
-  for (const destination of CONFIG.destinations) {
+  for (const destination of DESTINATIONS) {
     const routeKey = `${origin}-${destination}`;
-    const baseline = CONFIG.baselines[routeKey] || CONFIG.baselines.DEFAULT;
-    const threshold = baseline * (1 - CONFIG.discountThreshold);
+    const baseline = BASELINES[routeKey] || BASELINES.DEFAULT;
+    const threshold = baseline * (1 - settings.discountThreshold);
 
     const url = new URL("https://api.travelpayouts.com/v1/prices/cheap");
     url.searchParams.set("token", process.env.TRAVELPAYOUTS_TOKEN);
     url.searchParams.set("origin", origin);
     url.searchParams.set("destination", destination);
     url.searchParams.set("currency", "eur");
-    url.searchParams.set("page", "1");
 
     try {
       const res = await fetch(url.toString());
       const json = await res.json();
-
-      if (!json.success) {
-        console.log(`  [${origin}→${destination}] success:false — skipping`);
-        continue;
-      }
+      if (!json.success) { continue; }
 
       for (const [dest, data] of Object.entries(json.data || {})) {
         for (const [, flight] of Object.entries(data)) {
-          console.log(`  [${origin}→${dest}] €${flight.price} (threshold €${Math.round(threshold)})`);
-          if (flight.price <= threshold) {
-            deals.push({
-              origin,
-              destination: dest,
-              price: flight.price,
-              departDate: flight.departure_at,
-              returnDate: flight.return_at,
-              airline: flight.airline,
-              transfers: flight.transfers,
-            });
-          }
+
+          // Filter by month
+          const depMonth = new Date(flight.departure_at).getMonth() + 1;
+          if (!settings.months.includes(depMonth)) continue;
+
+          // Filter by trip duration
+          const tripDays = daysBetween(flight.departure_at, flight.return_at);
+          if (tripDays !== null && (tripDays < settings.minDays || tripDays > settings.maxDays)) continue;
+
+          // Filter by price threshold
+          if (flight.price > threshold) continue;
+
+          console.log(`  [${origin}→${dest}] €${flight.price} | ${flight.departure_at?.slice(0,10)} → ${flight.return_at?.slice(0,10)} (${tripDays}d) | threshold €${Math.round(threshold)}`);
+
+          deals.push({
+            origin,
+            destination: dest,
+            price: flight.price,
+            departDate: flight.departure_at,
+            returnDate: flight.return_at,
+            airline: flight.airline,
+            transfers: flight.transfers,
+            tripDays,
+          });
         }
       }
     } catch (err) {
@@ -120,27 +140,25 @@ async function fetchCheapFlights(origin) {
 
 // ─── AI DEAL VALIDATION ──────────────────────────────────────────────────────
 
-async function validateWithClaude(deal) {
+async function validateWithClaude(deal, settings) {
   const routeKey = `${deal.origin}-${deal.destination}`;
-  const baseline = CONFIG.baselines[routeKey] || CONFIG.baselines.DEFAULT;
+  const baseline = BASELINES[routeKey] || BASELINES.DEFAULT;
 
-  const prompt = `You are a flight deal expert. Evaluate if this is a genuine deal worth alerting subscribers about.
+  const prompt = `You are a flight deal expert. Evaluate this deal.
 
 Route: ${deal.origin} → ${deal.destination}
-Price found: €${deal.price} (${deal.transfers === 0 ? "direct" : deal.transfers + " stop(s)"})
+Price: €${deal.price} (${deal.transfers === 0 ? "direct" : deal.transfers + " stop(s)"})
 Airline: ${deal.airline}
-Departure: ${deal.departDate}
-Return: ${deal.returnDate || "one-way / not specified"}
-Typical price for this route: €${baseline}
+Departure: ${deal.departDate?.slice(0,10)}
+Return: ${deal.returnDate?.slice(0,10) || "not specified"}
+Trip duration: ${deal.tripDays !== null ? deal.tripDays + " days" : "unknown"}
+Typical price: €${baseline}
+Discount vs typical: ${Math.round((1 - deal.price/baseline)*100)}%
 
-Scoring guide:
-- Error fare (>70% below normal): score 9-10
-- Excellent deal (50-70% below): score 7-8
-- Good deal (30-50% below): score 5-6
-- Mediocre (<30% below): score 1-4, isDeal: false
+Score: 9-10 error fare (>70% off), 7-8 excellent (50-70% off), 5-6 good (30-50% off), 1-4 mediocre.
 
-Respond ONLY with valid JSON, no markdown:
-{"isDeal": true, "score": 8, "label": "Excellent Deal", "reason": "67% below typical price", "urgency": "Book in next 2h"}`;
+Respond ONLY with valid JSON:
+{"isDeal": true, "score": 8, "label": "Excellent Deal", "reason": "one sentence", "urgency": "Book in next 2h"}`;
 
   try {
     const res = await fetch("https://api.anthropic.com/v1/messages", {
@@ -160,150 +178,140 @@ Respond ONLY with valid JSON, no markdown:
     const text = data.content?.[0]?.text || "{}";
     return JSON.parse(text.replace(/```json|```/g, "").trim());
   } catch (err) {
-    console.error("Claude validation error:", err.message);
+    console.error("Claude error:", err.message);
     return { isDeal: false };
   }
 }
 
-// ─── SEND TELEGRAM (one message per deal) ────────────────────────────────────
+// ─── TELEGRAM (per deal) ─────────────────────────────────────────────────────
 
 async function sendTelegram(deal, ai) {
-  const bookingUrl = buildBookingUrl(deal);
+  const url = buildBookingUrl(deal.origin, deal.destination, deal.departDate, deal.returnDate);
   const emoji = ai.score >= 9 ? "🔥" : ai.score >= 7 ? "⭐" : "✅";
-  const depDate = deal.departDate?.slice(0, 10) || "?";
-  const retDate = deal.returnDate?.slice(0, 10);
+  const dep = deal.departDate?.slice(0, 10) || "?";
+  const ret = deal.returnDate?.slice(0, 10);
 
-  const message = [
+  const msg = [
     `✈️ *FLIGHT DEAL*`,
     ``,
     `🛫 *${deal.origin} → ${deal.destination}*`,
     `💶 *€${deal.price}* ${deal.transfers === 0 ? "(direct)" : `(${deal.transfers} stop)`}`,
-    `🏷️ ${emoji} ${ai.label} — Score ${ai.score}/10`,
-    `📅 ${depDate}${retDate ? " → " + retDate : ""}`,
+    `📅 ${dep}${ret ? " → " + ret : ""}${deal.tripDays ? " (" + deal.tripDays + " days)" : ""}`,
     `✈️ ${deal.airline}`,
+    `🏷️ ${emoji} ${ai.label} — Score ${ai.score}/10`,
     ``,
     `📝 _${ai.reason}_`,
     `⏰ ${ai.urgency}`,
     ``,
-    `👉 [Book on Skyscanner](${bookingUrl})`,
+    `👉 [Book on Google Flights](${url})`,
   ].join("\n");
 
-  const telegramRes = await fetch(
-    `https://api.telegram.org/bot${process.env.TELEGRAM_BOT_TOKEN}/sendMessage`,
-    {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({
-        chat_id: process.env.TELEGRAM_CHAT_ID,
-        text: message,
-        parse_mode: "Markdown",
-        disable_web_page_preview: false,
-      }),
-    }
-  );
-
-  const telegramData = await telegramRes.json();
-  if (telegramData.ok) {
-    console.log(`[TELEGRAM ✓] ${deal.origin}→${deal.destination} €${deal.price}`);
-  } else {
-    console.error(`[TELEGRAM ✗] Error:`, JSON.stringify(telegramData));
-  }
+  const r = await fetch(`https://api.telegram.org/bot${process.env.TELEGRAM_BOT_TOKEN}/sendMessage`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ chat_id: process.env.TELEGRAM_CHAT_ID, text: msg, parse_mode: "Markdown" }),
+  });
+  const d = await r.json();
+  if (d.ok) console.log(`[TELEGRAM ✓] ${deal.origin}→${deal.destination} €${deal.price}`);
+  else console.error(`[TELEGRAM ✗]`, JSON.stringify(d));
 }
 
-// ─── SEND DIGEST EMAIL (all deals in one email) ───────────────────────────────
+// ─── DIGEST EMAIL ────────────────────────────────────────────────────────────
 
-async function sendDigestEmail(confirmedDeals) {
+async function sendDigestEmail(confirmedDeals, settings) {
   const rows = confirmedDeals.map(({ deal, ai }) => {
     const emoji = ai.score >= 9 ? "🔥" : ai.score >= 7 ? "⭐" : "✅";
-    const bookingUrl = buildBookingUrl(deal);
-    const depDate = deal.departDate?.slice(0, 10) || "?";
-    const retDate = deal.returnDate?.slice(0, 10);
-    const baseline = CONFIG.baselines[`${deal.origin}-${deal.destination}`] || CONFIG.baselines.DEFAULT;
+    const url = buildBookingUrl(deal.origin, deal.destination, deal.departDate, deal.returnDate);
+    const dep = deal.departDate?.slice(0, 10) || "?";
+    const ret = deal.returnDate?.slice(0, 10) || "—";
+    const baseline = BASELINES[`${deal.origin}-${deal.destination}`] || BASELINES.DEFAULT;
     const savings = baseline - deal.price;
     const labelColor = ai.score >= 9 ? "#ec4899" : ai.score >= 7 ? "#f97316" : "#00c2a8";
 
     return `
     <tr>
-      <td style="padding:16px 12px;border-bottom:1px solid #1e2030;vertical-align:top">
-        <div style="font-size:16px;font-weight:bold;color:#fff">${deal.origin} → ${deal.destination}</div>
-        <div style="font-size:12px;color:#8892a4;margin-top:2px">${deal.airline} · ${deal.transfers === 0 ? "Direct" : deal.transfers + " stop"}</div>
+      <td style="padding:14px 12px;border-bottom:1px solid #1e2030;vertical-align:top">
+        <div style="font-size:15px;font-weight:bold;color:#fff">${deal.origin} → ${deal.destination}</div>
+        <div style="font-size:11px;color:#8892a4;margin-top:2px">${deal.airline} · ${deal.transfers === 0 ? "Direct" : deal.transfers + " stop"}</div>
       </td>
-      <td style="padding:16px 12px;border-bottom:1px solid #1e2030;vertical-align:top">
-        <div style="font-size:22px;font-weight:bold;color:#00c2a8">€${deal.price}</div>
+      <td style="padding:14px 12px;border-bottom:1px solid #1e2030;vertical-align:top">
+        <div style="font-size:20px;font-weight:bold;color:#00c2a8">€${deal.price}</div>
         ${savings > 0 ? `<div style="font-size:11px;color:#7c6ff7">save ~€${savings}</div>` : ""}
       </td>
-      <td style="padding:16px 12px;border-bottom:1px solid #1e2030;vertical-align:top">
-        <div style="font-size:13px;color:#e8e4d9">${depDate}</div>
-        ${retDate ? `<div style="font-size:11px;color:#8892a4">↩ ${retDate}</div>` : ""}
+      <td style="padding:14px 12px;border-bottom:1px solid #1e2030;vertical-align:top">
+        <div style="font-size:12px;color:#e8e4d9">Out: ${dep}</div>
+        <div style="font-size:12px;color:#e8e4d9">Ret: ${ret}</div>
+        ${deal.tripDays ? `<div style="font-size:11px;color:#8892a4">${deal.tripDays} days</div>` : ""}
       </td>
-      <td style="padding:16px 12px;border-bottom:1px solid #1e2030;vertical-align:top">
-        <span style="background:${labelColor}20;border:1px solid ${labelColor};color:${labelColor};padding:3px 8px;border-radius:4px;font-size:11px;font-weight:bold">${emoji} ${ai.label}</span>
+      <td style="padding:14px 12px;border-bottom:1px solid #1e2030;vertical-align:top">
+        <span style="background:${labelColor}20;border:1px solid ${labelColor};color:${labelColor};padding:3px 7px;border-radius:4px;font-size:11px;font-weight:bold">${emoji} ${ai.label}</span>
         <div style="font-size:11px;color:#5a6474;margin-top:4px">${ai.urgency}</div>
       </td>
-      <td style="padding:16px 12px;border-bottom:1px solid #1e2030;vertical-align:top">
-        <a href="${bookingUrl}" style="background:#00c2a8;color:#000;padding:8px 14px;border-radius:6px;text-decoration:none;font-weight:bold;font-size:13px;white-space:nowrap">Book →</a>
+      <td style="padding:14px 12px;border-bottom:1px solid #1e2030;vertical-align:top">
+        <a href="${url}" style="background:#00c2a8;color:#000;padding:8px 12px;border-radius:6px;text-decoration:none;font-weight:bold;font-size:12px;white-space:nowrap">Book →</a>
       </td>
     </tr>`;
   }).join("");
 
+  const monthNames = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+  const activeMonths = settings.months.map(m => monthNames[m-1]).join(", ");
+
   const html = `
 <!DOCTYPE html><html><body style="margin:0;padding:0;background:#0a0a0f;font-family:Arial,sans-serif">
 <div style="max-width:750px;margin:0 auto;padding:32px 24px">
-  <div style="font-size:11px;letter-spacing:0.3em;color:#00c2a8;text-transform:uppercase;margin-bottom:8px">Flight Deal Scanner</div>
-  <h1 style="font-size:28px;color:#e8e4d9;margin:0 0 4px">✈️ ${confirmedDeals.length} Deal${confirmedDeals.length > 1 ? "s" : ""} Found</h1>
-  <p style="color:#8892a4;font-size:13px;margin:0 0 24px">${new Date().toUTCString()} · ${CONFIG.discountThreshold * 100}%+ below average price</p>
+  <div style="font-size:10px;letter-spacing:0.3em;color:#00c2a8;text-transform:uppercase;margin-bottom:8px">Flight Deal Scanner</div>
+  <h1 style="font-size:26px;color:#e8e4d9;margin:0 0 4px">✈️ ${confirmedDeals.length} Deal${confirmedDeals.length > 1 ? "s" : ""} Found</h1>
+  <p style="color:#8892a4;font-size:12px;margin:0 0 6px">${new Date().toUTCString()}</p>
+  <p style="color:#5a6474;font-size:11px;margin:0 0 24px">Months: ${activeMonths} · Trip: ${settings.minDays}–${settings.maxDays} days · Min discount: ${Math.round(settings.discountThreshold*100)}% below average</p>
   <div style="background:#0d1117;border:1px solid #1e2030;border-radius:12px;overflow:hidden">
     <table style="width:100%;border-collapse:collapse">
       <thead>
         <tr style="background:#0f1420">
-          <th style="padding:12px;text-align:left;color:#4a5568;font-size:11px;text-transform:uppercase;letter-spacing:0.1em">Route</th>
-          <th style="padding:12px;text-align:left;color:#4a5568;font-size:11px;text-transform:uppercase;letter-spacing:0.1em">Price</th>
-          <th style="padding:12px;text-align:left;color:#4a5568;font-size:11px;text-transform:uppercase;letter-spacing:0.1em">Dates</th>
-          <th style="padding:12px;text-align:left;color:#4a5568;font-size:11px;text-transform:uppercase;letter-spacing:0.1em">Rating</th>
-          <th style="padding:12px;text-align:left;color:#4a5568;font-size:11px;text-transform:uppercase;letter-spacing:0.1em">Book</th>
+          <th style="padding:10px 12px;text-align:left;color:#4a5568;font-size:10px;text-transform:uppercase;letter-spacing:0.1em">Route</th>
+          <th style="padding:10px 12px;text-align:left;color:#4a5568;font-size:10px;text-transform:uppercase;letter-spacing:0.1em">Price</th>
+          <th style="padding:10px 12px;text-align:left;color:#4a5568;font-size:10px;text-transform:uppercase;letter-spacing:0.1em">Dates</th>
+          <th style="padding:10px 12px;text-align:left;color:#4a5568;font-size:10px;text-transform:uppercase;letter-spacing:0.1em">Rating</th>
+          <th style="padding:10px 12px;text-align:left;color:#4a5568;font-size:10px;text-transform:uppercase;letter-spacing:0.1em">Book</th>
         </tr>
       </thead>
       <tbody>${rows}</tbody>
     </table>
   </div>
-  <div style="color:#4a5568;font-size:11px;text-align:center;margin-top:24px">
-    Flight Deal Scanner · Free · Running on GitHub Actions every 2 hours
-  </div>
+  <div style="color:#4a5568;font-size:11px;text-align:center;margin-top:24px">Flight Deal Scanner · GitHub Actions · Every 2 hours · <a href="https://${process.env.GH_USER || "your-username"}.github.io/${process.env.GH_REPO || "flight-deal-scanner"}/admin.html" style="color:#00c2a8">Change settings</a></div>
 </div></body></html>`;
 
   await mailer.sendMail({
-    from: `"✈️ Flight Deals" <${process.env.GMAIL_USER}>`,
+    from: `"Flight Deals" <${process.env.GMAIL_USER}>`,
     to: process.env.ALERT_EMAIL,
-    subject: `✈️ ${confirmedDeals.length} flight deal${confirmedDeals.length > 1 ? "s" : ""} found — ${new Date().toLocaleDateString()}`,
+    subject: `✈️ ${confirmedDeals.length} deal${confirmedDeals.length > 1 ? "s" : ""} found — ${new Date().toLocaleDateString()}`,
     html,
   });
-
-  console.log(`[EMAIL DIGEST ✓] Sent ${confirmedDeals.length} deals in one email`);
+  console.log(`[EMAIL DIGEST ✓] ${confirmedDeals.length} deals sent`);
 }
 
 // ─── MAIN ─────────────────────────────────────────────────────────────────────
 
 async function main() {
-  console.log(`\n✈️  Flight Deal Scanner — ${new Date().toISOString()}`);
-  console.log(`   Discount threshold: ${CONFIG.discountThreshold * 100}%+ below average`);
-  console.log(`   Origins: ${CONFIG.origins.join(", ")}\n`);
+  const settings = loadSettings();
 
-  // Debug: confirm secrets are loaded
-  console.log(`   TELEGRAM_BOT_TOKEN loaded: ${!!process.env.TELEGRAM_BOT_TOKEN}`);
-  console.log(`   TELEGRAM_CHAT_ID loaded: ${!!process.env.TELEGRAM_CHAT_ID}`);
-  console.log(`   GMAIL_USER loaded: ${!!process.env.GMAIL_USER}\n`);
+  const monthNames = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+  console.log(`\n✈️  Flight Deal Scanner — ${new Date().toISOString()}`);
+  console.log(`   Months: ${settings.months.map(m => monthNames[m-1]).join(", ")}`);
+  console.log(`   Trip duration: ${settings.minDays}–${settings.maxDays} days`);
+  console.log(`   Min discount: ${Math.round(settings.discountThreshold*100)}% below average`);
+  console.log(`   Origins: ${settings.origins.join(", ")}`);
+  console.log(`   TELEGRAM loaded: ${!!process.env.TELEGRAM_BOT_TOKEN} | GMAIL loaded: ${!!process.env.GMAIL_USER}\n`);
 
   const allDeals = [];
-
-  for (const origin of CONFIG.origins) {
+  for (const origin of settings.origins) {
     console.log(`   Checking ${origin}...`);
-    const deals = await fetchCheapFlights(origin);
-    console.log(`   → ${deals.length} deals below threshold\n`);
+    const deals = await fetchCheapFlights(origin, settings);
+    console.log(`   → ${deals.length} potential deals\n`);
     allDeals.push(...deals);
     await new Promise((r) => setTimeout(r, 600));
   }
 
-  console.log(`   Total deals found: ${allDeals.length}`);
+  console.log(`   Total matching deals: ${allDeals.length}`);
 
   if (allDeals.length === 0) {
     console.log("   No deals this run. Exiting.\n");
@@ -312,26 +320,24 @@ async function main() {
 
   console.log("   Running AI filter...\n");
 
-  let alertsSent = 0;
   const confirmedDeals = [];
+  let alertsSent = 0;
 
   for (const deal of allDeals) {
-    const ai = await validateWithClaude(deal);
+    const ai = await validateWithClaude(deal, settings);
     const emoji = ai.isDeal ? (ai.score >= 9 ? "🔥" : "⭐") : "✗";
-    console.log(`   ${emoji} ${deal.origin}→${deal.destination} €${deal.price} | score:${ai.score} | isDeal:${ai.isDeal}`);
+    console.log(`   ${emoji} ${deal.origin}→${deal.destination} €${deal.price} | ${deal.tripDays}d | score:${ai.score} | isDeal:${ai.isDeal}`);
 
     if (ai.isDeal) {
       await sendTelegram(deal, ai);
       confirmedDeals.push({ deal, ai });
       alertsSent++;
     }
-
     await new Promise((r) => setTimeout(r, 400));
   }
 
-  // Send one digest email with all confirmed deals
   if (confirmedDeals.length > 0) {
-    await sendDigestEmail(confirmedDeals);
+    await sendDigestEmail(confirmedDeals, settings);
   }
 
   console.log(`\n✅ Done. ${alertsSent} alert(s) sent.\n`);
