@@ -17,8 +17,25 @@ dotenv.config();
 const SUPABASE_URL = process.env.SUPABASE_URL;
 const SUPABASE_KEY = process.env.SUPABASE_SERVICE_KEY;
 
-async function supabase(method, table, body = null, query = "") {
-  const res = await fetch(`${SUPABASE_URL}/rest/v1/${table}${query}`, {
+async function supabase(method, table, body = null, params = {}) {
+  const url = new URL(`${SUPABASE_URL}/rest/v1/${table}`);
+  Object.entries(params).forEach(([k, v]) => url.searchParams.set(k, v));
+  const res = await fetch(url.toString(), {
+    method,
+    headers: {
+      apikey: SUPABASE_KEY,
+      Authorization: `Bearer ${SUPABASE_KEY}`,
+      "Content-Type": "application/json",
+      Prefer: method === "POST" ? "return=representation" : "",
+    },
+    body: body ? JSON.stringify(body) : null,
+  });
+  if (!res.ok) {
+    const err = await res.text();
+    throw new Error(`Supabase error: ${err}`);
+  }
+  return res.status === 204 ? null : res.json();
+}
     method,
     headers: {
       apikey: SUPABASE_KEY,
@@ -107,10 +124,12 @@ async function isDuplicate(deal) {
   const route = `${deal.origin}-${deal.destination}`;
   const since = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
   try {
-    const rows = await supabase(
-      "GET", "sent_deals", null,
-      `?route=eq.${route}&price=gte.${deal.price - 5}&sent_at=gte.${since}&limit=1`
-    );
+   const rows = await supabase("GET", "sent_deals", null, {
+  "route": `eq.${route}`,
+  "price": `gte.${deal.price - 5}`,
+  "sent_at": `gte.${since}`,
+  "limit": "1"
+});
     return rows && rows.length > 0;
   } catch (e) {
     console.error("Dedup check failed:", e.message);
@@ -144,7 +163,7 @@ const mailer = nodemailer.createTransport({
 
 async function getSubscribers() {
   try {
-    const rows = await supabase("GET", "subscribers", null, "?active=eq.true");
+    const rows = await supabase("GET", "subscribers", null, { "active": "eq.true" });
     return rows || [];
   } catch (e) {
     console.error("Failed to fetch subscribers:", e.message);
