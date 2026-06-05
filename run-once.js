@@ -18,7 +18,9 @@ const SUPABASE_URL = process.env.SUPABASE_URL;
 const SUPABASE_KEY = process.env.SUPABASE_SERVICE_KEY;
 
 async function supabase(method, table, body = null, params = {}) {
-  const res = await fetch(`${SUPABASE_URL}/rest/v1/${table}${query}`, {
+  const url = new URL(`${SUPABASE_URL}/rest/v1/${table}`);
+  Object.entries(params).forEach(([k, v]) => url.searchParams.set(k, v));
+  const res = await fetch(url.toString(), {
     method,
     headers: {
       apikey: SUPABASE_KEY,
