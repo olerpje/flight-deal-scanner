@@ -1,0 +1,356 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>✈️ Flight Deal Alerts</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    background: #0a0a0f;
+    color: #e8e4d9;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    min-height: 100vh;
+  }
+
+  .hero {
+    background: linear-gradient(135deg, #0d1117 0%, #0a0a1a 60%, #0d0a14 100%);
+    border-bottom: 1px solid #1e2030;
+    padding: 56px 24px 48px;
+    text-align: center;
+    position: relative;
+    overflow: hidden;
+  }
+
+  .hero::before {
+    content: '';
+    position: absolute; inset: 0;
+    background: radial-gradient(circle at 30% 50%, rgba(0,194,168,0.08) 0%, transparent 60%),
+                radial-gradient(circle at 70% 30%, rgba(124,111,247,0.08) 0%, transparent 60%);
+  }
+
+  .hero-inner { position: relative; max-width: 600px; margin: 0 auto; }
+  .hero-tag { font-size: 11px; letter-spacing: 0.3em; color: #00c2a8; text-transform: uppercase; margin-bottom: 16px; }
+  .hero h1 { font-size: clamp(32px, 6vw, 52px); font-weight: 800; line-height: 1.1; margin-bottom: 16px; }
+  .hero h1 span { background: linear-gradient(135deg, #00c2a8, #7c6ff7); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
+  .hero p { font-size: 16px; color: #8892a4; max-width: 440px; margin: 0 auto 32px; line-height: 1.6; }
+
+  .plans { display: flex; gap: 16px; max-width: 700px; margin: 0 auto; padding: 0 24px; flex-wrap: wrap; justify-content: center; }
+
+  .plan {
+    flex: 1; min-width: 280px; max-width: 340px;
+    background: #0d0d14; border: 1px solid #1e2030; border-radius: 16px;
+    padding: 28px 24px; cursor: pointer; transition: all 0.2s;
+    position: relative; margin: 24px 0 0;
+  }
+
+  .plan.selected { border-color: #00c2a8; background: #0d1117; }
+  .plan.premium.selected { border-color: #f97316; }
+
+  .plan-badge {
+    position: absolute; top: -12px; left: 50%; transform: translateX(-50%);
+    background: #f97316; color: #000; font-size: 11px; font-weight: 700;
+    padding: 3px 12px; border-radius: 20px; white-space: nowrap;
+  }
+
+  .plan-name { font-size: 13px; color: #8892a4; margin-bottom: 8px; text-transform: uppercase; letter-spacing: 0.1em; }
+  .plan-price { font-size: 36px; font-weight: 800; color: #e8e4d9; margin-bottom: 4px; }
+  .plan-price span { font-size: 14px; font-weight: 400; color: #5a6474; }
+  .plan-desc { font-size: 13px; color: #5a6474; margin-bottom: 20px; }
+
+  .plan-features { list-style: none; display: flex; flex-direction: column; gap: 8px; }
+  .plan-features li { font-size: 13px; color: #8892a4; display: flex; align-items: center; gap: 8px; }
+  .plan-features li::before { content: '✓'; color: #00c2a8; font-weight: bold; flex-shrink: 0; }
+  .plan-features li.dim { color: #3a3a4a; }
+  .plan-features li.dim::before { color: #3a3a4a; }
+
+  .form-section { max-width: 480px; margin: 32px auto 0; padding: 0 24px 48px; }
+
+  .card { background: #0d0d14; border: 1px solid #1e2030; border-radius: 14px; padding: 24px; margin-bottom: 16px; }
+  .card-title { font-size: 11px; letter-spacing: 0.2em; color: #4a5568; text-transform: uppercase; margin-bottom: 16px; }
+
+  .field { margin-bottom: 16px; }
+  .field:last-child { margin-bottom: 0; }
+  .field label { display: block; font-size: 13px; color: #8892a4; margin-bottom: 8px; }
+
+  input[type="text"], input[type="email"] {
+    width: 100%; background: #060609; border: 1px solid #1e2030; border-radius: 8px;
+    padding: 12px 14px; color: #e8e4d9; font-size: 14px; outline: none; transition: border-color 0.15s;
+  }
+  input:focus { border-color: #00c2a8; }
+
+  .airports-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px; }
+  .airport-btn {
+    background: #060609; border: 1px solid #1e2030; border-radius: 8px;
+    padding: 10px 8px; color: #5a6474; font-size: 12px; cursor: pointer;
+    text-align: center; transition: all 0.15s; -webkit-tap-highlight-color: transparent;
+  }
+  .airport-btn.active { background: #00c2a820; border-color: #00c2a8; color: #00c2a8; font-weight: 600; }
+
+  .alert-method { display: flex; gap: 8px; }
+  .method-btn {
+    flex: 1; background: #060609; border: 1px solid #1e2030; border-radius: 8px;
+    padding: 10px 8px; color: #5a6474; font-size: 13px; cursor: pointer;
+    text-align: center; transition: all 0.15s;
+  }
+  .method-btn.active { background: #7c6ff720; border-color: #7c6ff7; color: #7c6ff7; font-weight: 600; }
+
+  .telegram-note { font-size: 11px; color: #4a5568; margin-top: 10px; line-height: 1.6; }
+  .telegram-note a { color: #00c2a8; }
+
+  .submit-btn {
+    width: 100%; background: #00c2a8; color: #000; border: none; border-radius: 12px;
+    padding: 16px; font-size: 16px; font-weight: 700; cursor: pointer;
+    transition: opacity 0.15s; -webkit-tap-highlight-color: transparent; margin-top: 8px;
+  }
+  .submit-btn:active { opacity: 0.8; }
+  .submit-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+  .submit-btn.premium { background: linear-gradient(135deg, #f97316, #ec4899); color: #fff; }
+
+  .status {
+    padding: 12px 16px; border-radius: 8px; font-size: 13px;
+    text-align: center; margin-top: 12px; display: none;
+  }
+  .status.success { background: #00c2a820; border: 1px solid #00c2a8; color: #00c2a8; display: block; }
+  .status.error { background: #ec489920; border: 1px solid #ec4899; color: #ec4899; display: block; }
+  .status.loading { background: #7c6ff720; border: 1px solid #7c6ff7; color: #7c6ff7; display: block; }
+
+  #telegram-field { display: none; }
+  #telegram-field.visible { display: block; }
+</style>
+</head>
+<body>
+
+<div class="hero">
+  <div class="hero-inner">
+    <div class="hero-tag">Flight Deal Scanner</div>
+    <h1>Never Miss a <span>Flight Deal</span> Again</h1>
+    <p>AI-powered scanner checks 70 routes from NL, BE & DE to Mediterranean destinations every hour. Get alerted instantly when prices drop.</p>
+  </div>
+</div>
+
+<!-- Plan selector -->
+<div class="plans">
+  <div class="plan free selected" id="plan-free" onclick="selectPlan('free')">
+    <div class="plan-name">Free</div>
+    <div class="plan-price">€0 <span>/mo</span></div>
+    <div class="plan-desc">Email alerts, 24h delayed</div>
+    <ul class="plan-features">
+      <li>Email alerts</li>
+      <li>All routes scanned</li>
+      <li>AI-filtered deals only</li>
+      <li class="dim">Instant alerts</li>
+      <li class="dim">Telegram alerts</li>
+      <li class="dim">Custom airports</li>
+    </ul>
+  </div>
+
+  <div class="plan premium" id="plan-premium" onclick="selectPlan('premium')">
+    <div class="plan-badge">⭐ Most Popular</div>
+    <div class="plan-name">Premium</div>
+    <div class="plan-price">€9 <span>/mo</span></div>
+    <div class="plan-desc">Instant alerts, your airports</div>
+    <ul class="plan-features">
+      <li>Instant alerts</li>
+      <li>Email + Telegram</li>
+      <li>Custom airport preferences</li>
+      <li>All routes scanned</li>
+      <li>AI-filtered deals only</li>
+      <li>Cancel anytime</li>
+    </ul>
+  </div>
+</div>
+
+<!-- Form -->
+<div class="form-section">
+
+  <div class="card">
+    <div class="card-title">Your Details</div>
+    <div class="field">
+      <label>Email address</label>
+      <input type="email" id="email" placeholder="you@email.com">
+    </div>
+    <div class="field" id="telegram-field">
+      <label>Telegram username <span style="color:#5a6474;font-weight:normal">(optional)</span></label>
+      <input type="text" id="telegram" placeholder="@yourusername">
+      <div class="telegram-note">
+        To receive Telegram alerts: search <strong>@MedFlightDealsBot</strong> on Telegram and send /start first.
+      </div>
+    </div>
+  </div>
+
+  <div class="card" id="airports-card" style="display:none">
+    <div class="card-title">Your Nearest Airports</div>
+    <div class="field">
+      <label>Departure airports (pick all near you)</label>
+      <div class="airports-grid" id="origins-grid"></div>
+    </div>
+    <div class="field" style="margin-top:16px">
+      <label>Destinations (leave all selected for maximum deals)</label>
+      <div class="airports-grid" id="dests-grid"></div>
+    </div>
+  </div>
+
+  <div class="card" id="alert-method-card" style="display:none">
+    <div class="card-title">How to Receive Alerts</div>
+    <div class="alert-method" id="method-btns">
+      <button class="method-btn active" onclick="setMethod('email', this)">📧 Email only</button>
+      <button class="method-btn" onclick="setMethod('telegram', this)">📱 Telegram only</button>
+      <button class="method-btn" onclick="setMethod('both', this)">Both</button>
+    </div>
+  </div>
+
+  <button class="submit-btn" id="submit-btn" onclick="handleSubmit()">Subscribe Free</button>
+  <div class="status" id="status"></div>
+</div>
+
+<script>
+const SUPABASE_URL = "https://mxtkwkhaxphgduorhzdu.supabase.co";
+const SUPABASE_ANON_KEY = "REPLACE_WITH_YOUR_ANON_KEY";
+
+const ORIGINS = [
+  {code:"AMS", label:"🇳🇱 AMS · Amsterdam"},
+  {code:"EIN", label:"🇳🇱 EIN · Eindhoven"},
+  {code:"BRU", label:"🇧🇪 BRU · Brussels"},
+  {code:"CRL", label:"🇧🇪 CRL · Charleroi"},
+  {code:"FRA", label:"🇩🇪 FRA · Frankfurt"},
+  {code:"DUS", label:"🇩🇪 DUS · Düsseldorf"},
+  {code:"CGN", label:"🇩🇪 CGN · Cologne"},
+];
+
+const DESTS = [
+  {code:"ATH", label:"🇬🇷 ATH · Athens"},
+  {code:"SKG", label:"🇬🇷 SKG · Thessaloniki"},
+  {code:"HER", label:"🇬🇷 HER · Heraklion"},
+  {code:"FCO", label:"🇮🇹 FCO · Rome"},
+  {code:"NAP", label:"🇮🇹 NAP · Naples"},
+  {code:"PMO", label:"🇮🇹 PMO · Palermo"},
+  {code:"BCN", label:"🇪🇸 BCN · Barcelona"},
+  {code:"MAD", label:"🇪🇸 MAD · Madrid"},
+  {code:"AGP", label:"🇪🇸 AGP · Malaga"},
+  {code:"LIS", label:"🇵🇹 LIS · Lisbon"},
+];
+
+let selectedPlan = "free";
+let selectedOrigins = [];
+let selectedDests = DESTS.map(d => d.code);
+let alertMethod = "email";
+
+function selectPlan(plan) {
+  selectedPlan = plan;
+  document.getElementById("plan-free").classList.toggle("selected", plan === "free");
+  document.getElementById("plan-premium").classList.toggle("selected", plan === "premium");
+  document.getElementById("airports-card").style.display = plan === "premium" ? "block" : "none";
+  document.getElementById("alert-method-card").style.display = plan === "premium" ? "block" : "none";
+  document.getElementById("telegram-field").classList.toggle("visible", plan === "premium");
+  const btn = document.getElementById("submit-btn");
+  btn.textContent = plan === "premium" ? "Subscribe — €9/mo →" : "Subscribe Free";
+  btn.className = "submit-btn" + (plan === "premium" ? " premium" : "");
+}
+
+function setMethod(method, el) {
+  alertMethod = method;
+  document.querySelectorAll(".method-btn").forEach(b => b.classList.remove("active"));
+  el.classList.add("active");
+}
+
+function buildGrid(items, selectedArr, gridId, toggleFn) {
+  document.getElementById(gridId).innerHTML = items.map(item =>
+    `<button class="airport-btn ${selectedArr.includes(item.code) ? "active" : ""}"
+      onclick="${toggleFn}('${item.code}', this)">${item.label}</button>`
+  ).join("");
+}
+
+function toggleOrigin(code, el) {
+  if (selectedOrigins.includes(code)) {
+    selectedOrigins = selectedOrigins.filter(c => c !== code);
+    el.classList.remove("active");
+  } else {
+    selectedOrigins.push(code);
+    el.classList.add("active");
+  }
+}
+
+function toggleDest(code, el) {
+  if (selectedDests.includes(code)) {
+    if (selectedDests.length === 1) return;
+    selectedDests = selectedDests.filter(c => c !== code);
+    el.classList.remove("active");
+  } else {
+    selectedDests.push(code);
+    el.classList.add("active");
+  }
+}
+
+function setStatus(msg, type) {
+  const el = document.getElementById("status");
+  el.textContent = msg;
+  el.className = "status " + type;
+}
+
+async function handleSubmit() {
+  const email = document.getElementById("email").value.trim();
+  const telegram = document.getElementById("telegram").value.trim().replace("@", "");
+
+  if (!email) { setStatus("Please enter your email address.", "error"); return; }
+  if (selectedPlan === "premium" && selectedOrigins.length === 0) {
+    setStatus("Please select at least one departure airport.", "error"); return;
+  }
+
+  const btn = document.getElementById("submit-btn");
+  btn.disabled = true;
+  setStatus("Saving your subscription...", "loading");
+
+  const payload = {
+    email,
+    tier: selectedPlan,
+    alert_method: selectedPlan === "premium" ? alertMethod : "email",
+    origins: selectedPlan === "premium" ? selectedOrigins : [],
+    destinations: selectedPlan === "premium" ? selectedDests : [],
+    telegram_username: telegram || null,
+    active: true,
+  };
+
+  try {
+    const res = await fetch(`${SUPABASE_URL}/rest/v1/subscribers`, {
+      method: "POST",
+      headers: {
+        apikey: SUPABASE_ANON_KEY,
+        Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
+        "Content-Type": "application/json",
+        Prefer: "return=minimal",
+      },
+      body: JSON.stringify(payload),
+    });
+
+    if (res.ok || res.status === 201) {
+      if (selectedPlan === "premium") {
+        setStatus("Almost there! Redirecting to payment...", "loading");
+        setTimeout(() => {
+          // Replace with your Stripe payment link
+          window.location.href = `https://buy.stripe.com/REPLACE_WITH_STRIPE_LINK?prefilled_email=${encodeURIComponent(email)}`;
+        }, 1000);
+      } else {
+        setStatus("✅ You're subscribed! Check your email for your first deal alert.", "success");
+      }
+    } else {
+      const err = await res.text();
+      if (err.includes("duplicate")) {
+        setStatus("This email is already subscribed!", "error");
+      } else {
+        setStatus("Something went wrong. Please try again.", "error");
+      }
+    }
+  } catch (err) {
+    setStatus("Connection error. Please try again.", "error");
+  } finally {
+    btn.disabled = false;
+  }
+}
+
+// Init
+buildGrid(ORIGINS, selectedOrigins, "origins-grid", "toggleOrigin");
+buildGrid(DESTS, selectedDests, "dests-grid", "toggleDest");
+</script>
+</body>
+</html>
