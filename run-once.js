@@ -363,6 +363,7 @@ async function sendEmailToSubscriber(email, deals, tier) {
 
 async function main() {
   const settings = loadSettings();
+  console.log(`   SUPABASE_URL: "${process.env.SUPABASE_URL}"`);
   const monthNames = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
 
   console.log(`\n✈️  Flight Deal Scanner — ${new Date().toISOString()}`);
