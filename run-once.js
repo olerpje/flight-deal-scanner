@@ -22,18 +22,35 @@ const DEFAULTS = {
 const DESTINATIONS = ["ATH", "SKG", "HER", "FCO", "NAP", "PMO", "BCN", "MAD", "AGP", "LIS"];
 
 const BASELINES = {
-  "AMS-ATH": 110, "AMS-BCN": 90,  "AMS-FCO": 95,  "AMS-MAD": 85,
-  "AMS-LIS": 95,  "AMS-NAP": 100, "AMS-PMO": 105, "AMS-HER": 115,
-  "AMS-SKG": 110, "AMS-AGP": 90,
-  "BRU-ATH": 115, "BRU-BCN": 65,  "BRU-FCO": 90,  "BRU-MAD": 80,
-  "BRU-LIS": 90,  "BRU-NAP": 95,  "BRU-HER": 110,
-  "FRA-ATH": 120, "FRA-BCN": 95,  "FRA-FCO": 85,  "FRA-MAD": 90,
-  "FRA-LIS": 100, "FRA-NAP": 90,
-  "DUS-ATH": 115, "DUS-BCN": 88,  "DUS-FCO": 88,  "DUS-MAD": 85,
-  "CGN-ATH": 110, "CGN-BCN": 85,  "CGN-FCO": 85,
-  "EIN-ATH": 105, "EIN-BCN": 80,  "EIN-MAD": 78,  "EIN-FCO": 90,
-  "CRL-ATH": 105, "CRL-BCN": 60,  "CRL-MAD": 72,  "CRL-FCO": 85,
-  DEFAULT: 100,
+  // Amsterdam — expensive hub, high taxes
+  "AMS-ATH": 175, "AMS-BCN": 155, "AMS-FCO": 165, "AMS-MAD": 150,
+  "AMS-LIS": 160, "AMS-NAP": 170, "AMS-PMO": 175, "AMS-HER": 180,
+  "AMS-SKG": 175, "AMS-AGP": 155,
+  // Eindhoven — Ryanair hub but still pricier than BRU/CRL
+  "EIN-ATH": 145, "EIN-BCN": 130, "EIN-MAD": 125, "EIN-FCO": 140,
+  "EIN-SKG": 148, "EIN-HER": 152, "EIN-NAP": 142, "EIN-AGP": 130,
+  "EIN-LIS": 148, "EIN-PMO": 150,
+  // Brussels — keep low, it's a budget hub
+  "BRU-ATH": 115, "BRU-BCN": 85,  "BRU-FCO": 90,  "BRU-MAD": 80,
+  "BRU-LIS": 90,  "BRU-NAP": 95,  "BRU-HER": 110, "BRU-SKG": 110,
+  "BRU-AGP": 88,  "BRU-PMO": 105,
+  // Charleroi — cheapest airport, keep lowest
+  "CRL-ATH": 105, "CRL-BCN": 75,  "CRL-FCO": 82,  "CRL-MAD": 72,
+  "CRL-LIS": 80,  "CRL-NAP": 85,  "CRL-HER": 100, "CRL-SKG": 100,
+  "CRL-AGP": 78,  "CRL-PMO": 95,
+  // Frankfurt — expensive hub
+  "FRA-ATH": 170, "FRA-BCN": 150, "FRA-FCO": 145, "FRA-MAD": 148,
+  "FRA-LIS": 158, "FRA-NAP": 152, "FRA-SKG": 165, "FRA-HER": 170,
+  "FRA-AGP": 150, "FRA-PMO": 160,
+  // Düsseldorf
+  "DUS-ATH": 162, "DUS-BCN": 140, "DUS-FCO": 138, "DUS-MAD": 135,
+  "DUS-LIS": 148, "DUS-NAP": 150, "DUS-SKG": 155, "DUS-HER": 158,
+  "DUS-AGP": 135, "DUS-PMO": 152,
+  // Cologne
+  "CGN-ATH": 155, "CGN-BCN": 132, "CGN-FCO": 130, "CGN-MAD": 128,
+  "CGN-LIS": 142, "CGN-NAP": 142, "CGN-SKG": 148, "CGN-HER": 150,
+  "CGN-AGP": 128, "CGN-PMO": 145,
+  DEFAULT: 140,
 };
 
 // ─── LOAD SETTINGS ────────────────────────────────────────────────────────────
