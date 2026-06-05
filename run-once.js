@@ -111,10 +111,11 @@ async function isDuplicate(deal) {
   const since = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
   try {
     const rows = await supabase("GET", "sent_deals", null, {
-      "route": `eq.${route}`,
-      "price": `gte.${deal.price - 5}`,
-      "sent_at": `gte.${since}`,
+      "route": "eq." + route,
+      "price": "gte." + (deal.price - 5),
+      "sent_at": "gte." + since,
       "limit": "1"
+    });
     });
     return rows && rows.length > 0;
   } catch (e) {
