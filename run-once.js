@@ -11,9 +11,7 @@ async function supabase(method, table, body, params) {
   const url = new URL(SUPABASE_URL + "/rest/v1/" + table);
   url.searchParams.set("select", "*");
   if (params) {
-    Object.keys(params).forEach(function(k) {
-      url.searchParams.set(k, params[k]);
-    });
+    Object.keys(params).forEach(function(k) { url.searchParams.set(k, params[k]); });
   }
   const options = {
     method: method,
@@ -94,6 +92,58 @@ function daysBetween(date1, date2) {
   return Math.round(Math.abs(new Date(date2) - new Date(date1)) / (1000 * 60 * 60 * 24));
 }
 
+// ─── LIVE PRICE VERIFICATION ─────────────────────────────────────────────────
+// Fetches a fresh price from Travelpayouts for the exact route + date
+// If verified price is within €5 of original, deal is confirmed
+
+async function verifyLivePrice(deal) {
+  try {
+    const depDate = deal.departDate ? new Date(deal.departDate) : null;
+    if (!depDate) return { verified: true, livePrice: deal.price };
+
+    const url = new URL("https://api.travelpayouts.com/v1/prices/cheap");
+    url.searchParams.set("token", process.env.TRAVELPAYOUTS_TOKEN);
+    url.searchParams.set("origin", deal.origin);
+    url.searchParams.set("destination", deal.destination);
+    url.searchParams.set("currency", "eur");
+    url.searchParams.set("depart_date", depDate.toISOString().slice(0, 7)); // YYYY-MM
+
+    const res = await fetch(url.toString());
+    const json = await res.json();
+
+    if (!json.success || !json.data) {
+      console.log("   [VERIFY] No live data — passing through");
+      return { verified: true, livePrice: deal.price };
+    }
+
+    // Find the closest matching flight
+    let bestPrice = null;
+    for (const dest of Object.keys(json.data)) {
+      if (dest !== deal.destination) continue;
+      for (const key of Object.keys(json.data[dest])) {
+        const f = json.data[dest][key];
+        if (bestPrice === null || f.price < bestPrice) bestPrice = f.price;
+      }
+    }
+
+    if (bestPrice === null) {
+      console.log("   [VERIFY] Route not found in live check — passing through");
+      return { verified: true, livePrice: deal.price };
+    }
+
+    const diff = Math.abs(bestPrice - deal.price);
+    const verified = diff <= 20;
+    console.log("   [VERIFY] " + deal.origin + "→" + deal.destination + " original €" + deal.price + " live €" + bestPrice + " diff €" + diff + " → " + (verified ? "CONFIRMED ✓" : "PRICE CHANGED ✗"));
+    return { verified: verified, livePrice: bestPrice };
+
+  } catch (e) {
+    console.log("   [VERIFY] Error — passing through:", e.message);
+    return { verified: true, livePrice: deal.price };
+  }
+}
+
+// ─── DEDUPLICATION ────────────────────────────────────────────────────────────
+
 async function isDuplicate(deal) {
   const route = deal.origin + "-" + deal.destination;
   const since = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
@@ -170,14 +220,9 @@ async function fetchCheapFlights(origin, settings) {
           if (flight.price > threshold) continue;
           console.log("  [" + origin + "→" + dest + "] €" + flight.price + " | " + (flight.departure_at ? flight.departure_at.slice(0,10) : "?") + " → " + (flight.return_at ? flight.return_at.slice(0,10) : "?") + " (" + tripDays + "d)");
           deals.push({
-            origin: origin,
-            destination: dest,
-            price: flight.price,
-            departDate: flight.departure_at,
-            returnDate: flight.return_at,
-            airline: flight.airline,
-            transfers: flight.transfers,
-            tripDays: tripDays,
+            origin: origin, destination: dest, price: flight.price,
+            departDate: flight.departure_at, returnDate: flight.return_at,
+            airline: flight.airline, transfers: flight.transfers, tripDays: tripDays,
           });
         }
       }
@@ -199,12 +244,11 @@ async function validateWithClaude(deal) {
     "Airline: " + deal.airline + "\n" +
     "Departure: " + (deal.departDate ? deal.departDate.slice(0,10) : "unknown") + "\n" +
     "Return: " + (deal.returnDate ? deal.returnDate.slice(0,10) : "not specified") + "\n" +
-    "Trip duration: " + (deal.tripDays !== null ? deal.tripDays + " days" : "unknown") + "\n" +
+    "Trip: " + (deal.tripDays !== null ? deal.tripDays + " days" : "unknown") + "\n" +
     "Typical price: EUR " + baseline + "\n" +
     "Discount: " + discount + "%\n" +
     "Score 9-10 error fare (>70% off), 7-8 excellent (50-70% off), 5-6 good (30-50% off), 1-4 mediocre.\n" +
     'Respond ONLY with valid JSON: {"isDeal": true, "score": 8, "label": "Excellent Deal", "reason": "one sentence", "urgency": "Book in next 2h"}';
-
   try {
     const res = await fetch("https://api.anthropic.com/v1/messages", {
       method: "POST",
@@ -241,7 +285,6 @@ async function sendTelegramToSubscriber(deal, ai, chatId) {
     "📝 _" + ai.reason + "_\n" +
     "⏰ " + ai.urgency + "\n\n" +
     "👉 [Book on Google Flights](" + url + ")";
-
   const r = await fetch("https://api.telegram.org/bot" + process.env.TELEGRAM_BOT_TOKEN + "/sendMessage", {
     method: "POST",
     headers: { "content-type": "application/json" },
@@ -252,63 +295,77 @@ async function sendTelegramToSubscriber(deal, ai, chatId) {
   else console.log("[TELEGRAM ✓] chat_id " + chatId);
 }
 
+// ─── MOBILE-FRIENDLY EMAIL ────────────────────────────────────────────────────
+
 function buildEmailHtml(confirmedDeals, tier) {
-  const rows = confirmedDeals.map(function(item) {
+  const cards = confirmedDeals.map(function(item) {
     const deal = item.deal;
     const ai = item.ai;
     const emoji = ai.score >= 9 ? "🔥" : ai.score >= 7 ? "⭐" : "✅";
     const url = buildBookingUrl(deal.origin, deal.destination, deal.departDate, deal.returnDate);
     const dep = deal.departDate ? deal.departDate.slice(0, 10) : "?";
-    const ret = deal.returnDate ? deal.returnDate.slice(0, 10) : "—";
+    const ret = deal.returnDate ? deal.returnDate.slice(0, 10) : null;
     const baseline = BASELINES[deal.origin + "-" + deal.destination] || BASELINES.DEFAULT;
     const savings = baseline - deal.price;
     const labelColor = ai.score >= 9 ? "#ec4899" : ai.score >= 7 ? "#f97316" : "#00c2a8";
-    return "<tr>" +
-      "<td style='padding:14px 12px;border-bottom:1px solid #1e2030;vertical-align:top'>" +
-        "<div style='font-size:15px;font-weight:bold;color:#fff'>" + deal.origin + " → " + deal.destination + "</div>" +
-        "<div style='font-size:11px;color:#8892a4;margin-top:2px'>" + deal.airline + " · " + (deal.transfers === 0 ? "Direct" : deal.transfers + " stop") + "</div>" +
-      "</td>" +
-      "<td style='padding:14px 12px;border-bottom:1px solid #1e2030;vertical-align:top'>" +
-        "<div style='font-size:20px;font-weight:bold;color:#00c2a8'>€" + deal.price + "</div>" +
-        (savings > 0 ? "<div style='font-size:11px;color:#7c6ff7'>save ~€" + savings + "</div>" : "") +
-      "</td>" +
-      "<td style='padding:14px 12px;border-bottom:1px solid #1e2030;vertical-align:top'>" +
-        "<div style='font-size:12px;color:#e8e4d9'>Out: " + dep + "</div>" +
-        "<div style='font-size:12px;color:#e8e4d9'>Ret: " + ret + "</div>" +
-        (deal.tripDays ? "<div style='font-size:11px;color:#8892a4'>" + deal.tripDays + " days</div>" : "") +
-      "</td>" +
-      "<td style='padding:14px 12px;border-bottom:1px solid #1e2030;vertical-align:top'>" +
-        "<span style='background:" + labelColor + "20;border:1px solid " + labelColor + ";color:" + labelColor + ";padding:3px 7px;border-radius:4px;font-size:11px;font-weight:bold'>" + emoji + " " + ai.label + "</span>" +
-        "<div style='font-size:11px;color:#5a6474;margin-top:4px'>" + ai.urgency + "</div>" +
-      "</td>" +
-      "<td style='padding:14px 12px;border-bottom:1px solid #1e2030;vertical-align:top'>" +
-        "<a href='" + url + "' style='background:#00c2a8;color:#000;padding:8px 12px;border-radius:6px;text-decoration:none;font-weight:bold;font-size:12px;white-space:nowrap'>Book →</a>" +
-      "</td>" +
-    "</tr>";
+    const borderColor = ai.score >= 9 ? "#ec489940" : ai.score >= 7 ? "#f9731640" : "#00c2a840";
+
+    return "<div style='background:#0d1117;border:1px solid " + borderColor + ";border-radius:12px;margin-bottom:16px;overflow:hidden'>" +
+      // Header row
+      "<div style='padding:16px 16px 12px;display:flex;justify-content:space-between;align-items:flex-start'>" +
+        "<div>" +
+          "<div style='font-size:20px;font-weight:bold;color:#ffffff'>" + deal.origin + " → " + deal.destination + "</div>" +
+          "<div style='font-size:12px;color:#8892a4;margin-top:2px'>" + deal.airline + " · " + (deal.transfers === 0 ? "Direct" : deal.transfers + " stop") + "</div>" +
+        "</div>" +
+        "<div style='text-align:right'>" +
+          "<div style='font-size:28px;font-weight:bold;color:#00c2a8'>€" + deal.price + "</div>" +
+          (savings > 0 ? "<div style='font-size:11px;color:#7c6ff7'>save ~€" + savings + "</div>" : "") +
+        "</div>" +
+      "</div>" +
+      // Dates row
+      "<div style='padding:0 16px 12px;display:flex;gap:24px'>" +
+        "<div>" +
+          "<div style='font-size:10px;color:#4a5568;text-transform:uppercase;letter-spacing:0.1em;margin-bottom:2px'>Departure</div>" +
+          "<div style='font-size:14px;color:#e8e4d9;font-weight:600'>" + dep + "</div>" +
+        "</div>" +
+        (ret ? "<div>" +
+          "<div style='font-size:10px;color:#4a5568;text-transform:uppercase;letter-spacing:0.1em;margin-bottom:2px'>Return</div>" +
+          "<div style='font-size:14px;color:#e8e4d9;font-weight:600'>" + ret + "</div>" +
+        "</div>" : "") +
+        (deal.tripDays ? "<div>" +
+          "<div style='font-size:10px;color:#4a5568;text-transform:uppercase;letter-spacing:0.1em;margin-bottom:2px'>Duration</div>" +
+          "<div style='font-size:14px;color:#e8e4d9;font-weight:600'>" + deal.tripDays + " days</div>" +
+        "</div>" : "") +
+      "</div>" +
+      // Label + urgency
+      "<div style='padding:0 16px 16px;display:flex;align-items:center;gap:10px'>" +
+        "<span style='background:" + labelColor + "20;border:1px solid " + labelColor + ";color:" + labelColor + ";padding:4px 10px;border-radius:6px;font-size:12px;font-weight:bold'>" + emoji + " " + ai.label + "</span>" +
+        "<span style='font-size:12px;color:#5a6474'>⏰ " + ai.urgency + "</span>" +
+      "</div>" +
+      // Reason
+      "<div style='padding:0 16px 16px;font-size:13px;color:#8892a4;font-style:italic'>" + ai.reason + "</div>" +
+      // Book button — full width for mobile
+      "<div style='padding:0 16px 16px'>" +
+        "<a href='" + url + "' style='display:block;background:#00c2a8;color:#000000;text-align:center;padding:14px;border-radius:8px;text-decoration:none;font-weight:bold;font-size:16px'>Book Now on Google Flights →</a>" +
+      "</div>" +
+    "</div>";
   }).join("");
 
   const freeNote = tier === "free"
-    ? "<div style='background:#f9731610;border:1px solid #f9731640;border-radius:8px;padding:12px 16px;margin-bottom:20px;font-size:12px;color:#f97316'>⏰ Upgrade to Premium (€9/mo) for instant alerts: <a href='https://olerpje.github.io/flight-deal-scanner/signup.html' style='color:#f97316;font-weight:bold'>Sign up here</a></div>"
+    ? "<div style='background:#f9731610;border:1px solid #f9731640;border-radius:10px;padding:14px 16px;margin-bottom:20px;font-size:13px;color:#f97316'>⏰ <strong>Free tier — 24h delayed.</strong> <a href='https://olerpje.github.io/flight-deal-scanner/signup.html' style='color:#f97316;font-weight:bold'>Upgrade to Premium (€9/mo)</a> for instant alerts + Telegram.</div>"
     : "";
 
-  return "<!DOCTYPE html><html><body style='margin:0;padding:0;background:#0a0a0f;font-family:Arial,sans-serif'>" +
-    "<div style='max-width:750px;margin:0 auto;padding:32px 24px'>" +
+  return "<!DOCTYPE html><html><head><meta name='viewport' content='width=device-width,initial-scale=1'></head>" +
+    "<body style='margin:0;padding:0;background:#0a0a0f;font-family:Arial,sans-serif'>" +
+    "<div style='max-width:600px;margin:0 auto;padding:24px 16px'>" +
     "<div style='font-size:10px;letter-spacing:0.3em;color:#00c2a8;text-transform:uppercase;margin-bottom:8px'>Flight Deal Scanner</div>" +
-    "<h1 style='font-size:26px;color:#e8e4d9;margin:0 0 4px'>✈️ " + confirmedDeals.length + " Deal" + (confirmedDeals.length > 1 ? "s" : "") + " Found</h1>" +
+    "<h1 style='font-size:24px;color:#e8e4d9;margin:0 0 4px'>✈️ " + confirmedDeals.length + " Deal" + (confirmedDeals.length > 1 ? "s" : "") + " Found</h1>" +
     "<p style='color:#8892a4;font-size:12px;margin:0 0 20px'>" + new Date().toUTCString() + "</p>" +
     freeNote +
-    "<div style='background:#0d1117;border:1px solid #1e2030;border-radius:12px;overflow:hidden'>" +
-    "<table style='width:100%;border-collapse:collapse'>" +
-    "<thead><tr style='background:#0f1420'>" +
-    "<th style='padding:10px 12px;text-align:left;color:#4a5568;font-size:10px;text-transform:uppercase'>Route</th>" +
-    "<th style='padding:10px 12px;text-align:left;color:#4a5568;font-size:10px;text-transform:uppercase'>Price</th>" +
-    "<th style='padding:10px 12px;text-align:left;color:#4a5568;font-size:10px;text-transform:uppercase'>Dates</th>" +
-    "<th style='padding:10px 12px;text-align:left;color:#4a5568;font-size:10px;text-transform:uppercase'>Rating</th>" +
-    "<th style='padding:10px 12px;text-align:left;color:#4a5568;font-size:10px;text-transform:uppercase'>Book</th>" +
-    "</tr></thead>" +
-    "<tbody>" + rows + "</tbody>" +
-    "</table></div>" +
-    "<div style='color:#4a5568;font-size:11px;text-align:center;margin-top:24px'>Flight Deal Scanner · <a href='https://olerpje.github.io/flight-deal-scanner/signup.html' style='color:#00c2a8'>Manage subscription</a></div>" +
+    cards +
+    "<div style='color:#4a5568;font-size:11px;text-align:center;margin-top:8px'>" +
+    "Flight Deal Scanner · <a href='https://olerpje.github.io/flight-deal-scanner/signup.html' style='color:#00c2a8'>Manage subscription</a>" +
+    "</div>" +
     "</div></body></html>";
 }
 
@@ -344,34 +401,49 @@ async function main() {
   console.log("   Total matching: " + allDeals.length);
   if (allDeals.length === 0) { console.log("   No deals. Exiting.\n"); process.exit(0); }
 
-  console.log("   Running AI filter + deduplication...\n");
+  console.log("   Running AI filter + price verification + deduplication...\n");
   const newDeals = [];
 
   for (const deal of allDeals) {
+    // Step 1 — AI filter
     const ai = await validateWithClaude(deal);
     if (!ai.isDeal) {
       console.log("   ✗ " + deal.origin + "→" + deal.destination + " €" + deal.price + " | score:" + ai.score);
       continue;
     }
+
+    // Step 2 — Live price verification
+    const verify = await verifyLivePrice(deal);
+    if (!verify.verified) {
+      console.log("   ✗ PRICE CHANGED: " + deal.origin + "→" + deal.destination + " was €" + deal.price + " now €" + verify.livePrice + " — skipping");
+      continue;
+    }
+
+    // Update price to verified live price
+    deal.price = verify.livePrice;
+
+    // Step 3 — Deduplication
     const duplicate = await isDuplicate(deal);
     if (duplicate) {
       console.log("   ⟳ " + deal.origin + "→" + deal.destination + " €" + deal.price + " — already sent, skipping");
       continue;
     }
+
     const emoji = ai.score >= 9 ? "🔥" : "⭐";
-    console.log("   " + emoji + " NEW: " + deal.origin + "→" + deal.destination + " €" + deal.price + " | score:" + ai.score);
+    console.log("   " + emoji + " NEW VERIFIED: " + deal.origin + "→" + deal.destination + " €" + deal.price + " | score:" + ai.score);
     newDeals.push({ deal: deal, ai: ai });
     await markAsSent(deal);
     await new Promise(function(r) { setTimeout(r, 400); });
   }
 
   if (newDeals.length === 0) {
-    console.log("\n   No new deals (all already sent). Exiting.\n");
+    console.log("\n   No new verified deals. Exiting.\n");
     process.exit(0);
   }
 
-  console.log("\n   " + newDeals.length + " new deals to send!\n");
+  console.log("\n   " + newDeals.length + " new verified deals to send!\n");
 
+  // Send to owner
   await sendEmailToSubscriber(process.env.ALERT_EMAIL, newDeals, "premium");
   if (process.env.TELEGRAM_CHAT_ID) {
     for (const item of newDeals) {
@@ -379,6 +451,7 @@ async function main() {
     }
   }
 
+  // Send to subscribers
   const subscribers = await getSubscribers();
   console.log("\n   Subscribers: " + subscribers.length);
 
@@ -406,7 +479,7 @@ async function main() {
     }
   }
 
-  console.log("\n✅ Done. " + newDeals.length + " new deal(s) sent to " + subscribers.length + " subscriber(s).\n");
+  console.log("\n✅ Done. " + newDeals.length + " verified deal(s) sent to " + subscribers.length + " subscriber(s).\n");
   process.exit(0);
 }
 
