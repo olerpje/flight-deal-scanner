@@ -65,6 +65,10 @@ const BASELINES = {
   "CGN-LIS": 142, "CGN-NAP": 142, "CGN-SKG": 148, "CGN-HER": 150,
   "CGN-AGP": 100, "CGN-PMO": 145,
   DEFAULT: 140,
+  function getBaseline(origin, destination) {
+  const dest = destination === "ROM" ? "FCO" : destination;
+  return BASELINES[origin + "-" + dest] || BASELINES.DEFAULT;
+}
 };
 
 function loadSettings() {
@@ -243,8 +247,7 @@ async function fetchCheapFlights(origin, settings) {
 }
 
 async function validateWithClaude(deal) {
-  const routeKey = deal.origin + "-" + deal.destination;
-  const baseline = BASELINES[routeKey] || BASELINES.DEFAULT;
+  const baseline = getBaseline(deal.origin, deal.destination);
   const discount = Math.round((1 - deal.price / baseline) * 100);
   const prompt = "You are a flight deal expert. Evaluate this deal.\n" +
     "Route: " + deal.origin + " to " + deal.destination + "\n" +
@@ -316,7 +319,7 @@ function buildEmailHtml(confirmedDeals, tier) {
     const gUrl = buildBookingUrl(deal.origin, deal.destination, deal.departDate, deal.returnDate);
     const dep = deal.departDate ? deal.departDate.slice(0, 10) : "?";
     const ret = deal.returnDate ? deal.returnDate.slice(0, 10) : null;
-    const baseline = BASELINES[deal.origin + "-" + deal.destination] || BASELINES.DEFAULT;
+    const baseline = getBaseline(deal.origin, deal.destination);
     const savings = baseline - deal.price;
     const labelColor = ai.score >= 9 ? "#ec4899" : ai.score >= 7 ? "#f97316" : "#00c2a8";
     const borderColor = ai.score >= 9 ? "#ec489940" : ai.score >= 7 ? "#f9731640" : "#00c2a840";
