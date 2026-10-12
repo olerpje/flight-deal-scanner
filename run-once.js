@@ -450,8 +450,13 @@ async function main() {
     console.error("[EMAIL ✗]", e.message);
   }
   if (process.env.TELEGRAM_CHAT_ID) {
-    for (const item of newDeals) {
-      await sendTelegramToSubscriber(item.deal, item.ai, process.env.TELEGRAM_CHAT_ID);
+        for (const item of newDeals) {
+      try {
+        await sendTelegramToSubscriber(item.deal, item.ai, process.env.TELEGRAM_CHAT_ID);
+      } catch (e) {
+        console.error("[TELEGRAM ✗]", e.message);
+      }
+      await new Promise(function(r) { setTimeout(r, 1200); });
     }
   }
 
