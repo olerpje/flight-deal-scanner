@@ -443,8 +443,12 @@ async function main() {
 
   console.log("\n   " + newDeals.length + " new verified deals to send!\n");
 
-  // Send to owner
-  await sendEmailToSubscriber(process.env.ALERT_EMAIL, newDeals, "premium");
+   // Send to owner
+  try {
+    await sendEmailToSubscriber(process.env.ALERT_EMAIL, newDeals, "premium");
+  } catch (e) {
+    console.error("[EMAIL ✗]", e.message);
+  }
   if (process.env.TELEGRAM_CHAT_ID) {
     for (const item of newDeals) {
       await sendTelegramToSubscriber(item.deal, item.ai, process.env.TELEGRAM_CHAT_ID);
