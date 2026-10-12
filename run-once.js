@@ -71,7 +71,6 @@ function getBaseline(origin, destination) {
   const dest = destination === "ROM" ? "FCO" : destination;
   return BASELINES[origin + "-" + dest] || BASELINES.DEFAULT;
 }
-};
 
 function loadSettings() {
   try {
