@@ -63,9 +63,11 @@ const BASELINES = {
   "DUS-AGP": 65, "DUS-PMO": 115,
   "CGN-ATH": 125, "CGN-BCN": 72, "CGN-FCO": 130, "CGN-MAD": 128,
   "CGN-LIS": 142, "CGN-NAP": 142, "CGN-SKG": 148, "CGN-HER": 150,
-  "CGN-AGP": 100, "CGN-PMO": 145,
+    "CGN-AGP": 100, "CGN-PMO": 145,
   DEFAULT: 140,
-  function getBaseline(origin, destination) {
+};
+
+function getBaseline(origin, destination) {
   const dest = destination === "ROM" ? "FCO" : destination;
   return BASELINES[origin + "-" + dest] || BASELINES.DEFAULT;
 }
