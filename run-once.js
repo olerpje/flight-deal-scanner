@@ -278,23 +278,24 @@ async function validateWithClaude(deal) {
     return { isDeal: false };
   }
 }
-
 async function sendTelegramToSubscriber(deal, ai, chatId) {
-  const url = buildAviasalesUrl(deal.origin, deal.destination, deal.departDate, deal.returnDate);   const gUrl = buildBookingUrl(deal.origin, deal.destination, deal.departDate, deal.returnDate);
+  const url = buildAviasalesUrl(deal.origin, deal.destination, deal.departDate, deal.returnDate);
+  const gUrl = buildBookingUrl(deal.origin, deal.destination, deal.departDate, deal.returnDate);
+  const NL = String.fromCharCode(10);
   const emoji = ai.score >= 9 ? "🔥" : ai.score >= 7 ? "⭐" : "✅";
   const dep = deal.departDate ? deal.departDate.slice(0,10) : "?";
   const ret = deal.returnDate ? deal.returnDate.slice(0,10) : null;
-  const msg = "✈️ *FLIGHT DEAL*\n\n" +
-    "🛫 *" + deal.origin + " → " + deal.destination + "*\n" +
-    "💶 *€" + deal.price + "* " + (deal.transfers === 0 ? "(direct)" : "(" + deal.transfers + " stop)") + "\n" +
-    "📅 " + dep + (ret ? " → " + ret : "") + (deal.tripDays ? " (" + deal.tripDays + "d)" : "") + "\n" +
-    "✈️ " + deal.airline + "\n" +
-    "🏷️ " + emoji + " " + ai.label + " — Score " + ai.score + "/10\n\n" +
-    "📝 _" + ai.reason + "_\n" +
-    "⏰ " + ai.urgency + "\n\n" +
-    "👉 [Check price on Aviasales](" + url + ")
-" +     "🔎 [Compare on Google Flights](" + gUrl + ")
-" +     "_Cached fare, price may have changed_";
+  const msg = "✈️ *FLIGHT DEAL*" + NL + NL +
+    "🛫 *" + deal.origin + " → " + deal.destination + "*" + NL +
+    "💶 *€" + deal.price + "* " + (deal.transfers === 0 ? "(direct)" : "(" + deal.transfers + " stop)") + NL +
+    "📅 " + dep + (ret ? " → " + ret : "") + (deal.tripDays ? " (" + deal.tripDays + "d)" : "") + NL +
+    "✈️ " + deal.airline + NL +
+    "🏷️ " + emoji + " " + ai.label + " — Score " + ai.score + "/10" + NL + NL +
+    "📝 _" + ai.reason + "_" + NL +
+    "⏰ " + ai.urgency + NL + NL +
+    "👉 [Check price on Aviasales](" + url + ")" + NL +
+    "🔎 [Compare on Google Flights](" + gUrl + ")" + NL +
+    "_Cached fare, price may have changed_";
   const r = await fetch("https://api.telegram.org/bot" + process.env.TELEGRAM_BOT_TOKEN + "/sendMessage", {
     method: "POST",
     headers: { "content-type": "application/json" },
@@ -304,7 +305,6 @@ async function sendTelegramToSubscriber(deal, ai, chatId) {
   if (!d.ok) console.error("[TELEGRAM ✗] chat_id " + chatId + ":", d.description);
   else console.log("[TELEGRAM ✓] chat_id " + chatId);
 }
-
 // ─── MOBILE-FRIENDLY EMAIL ────────────────────────────────────────────────────
 
 function buildEmailHtml(confirmedDeals, tier) {
