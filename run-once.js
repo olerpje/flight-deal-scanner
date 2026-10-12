@@ -87,6 +87,14 @@ function buildBookingUrl(origin, destination, departDate, returnDate) {
   return "https://www.google.com/travel/flights?q=Flights+from+" + origin + "+to+" + destination;
 }
 
+function buildAviasalesUrl(origin, destination, departDate, returnDate) {
+  const dm = function(s) { return s.slice(8, 10) + s.slice(5, 7); }; // DDMM
+  if (!departDate) return "https://www.aviasales.com/";
+  let url = "https://www.aviasales.com/search/" + origin + dm(departDate) + destination;
+  if (returnDate) url += dm(returnDate);
+  return url + "1"; // 1 passenger
+}
+
 function daysBetween(date1, date2) {
   if (!date1 || !date2) return null;
   return Math.round(Math.abs(new Date(date2) - new Date(date1)) / (1000 * 60 * 60 * 24));
@@ -272,7 +280,7 @@ async function validateWithClaude(deal) {
 }
 
 async function sendTelegramToSubscriber(deal, ai, chatId) {
-  const url = buildBookingUrl(deal.origin, deal.destination, deal.departDate, deal.returnDate);
+  const url = buildAviasalesUrl(deal.origin, deal.destination, deal.departDate, deal.returnDate);   const gUrl = buildBookingUrl(deal.origin, deal.destination, deal.departDate, deal.returnDate);
   const emoji = ai.score >= 9 ? "🔥" : ai.score >= 7 ? "⭐" : "✅";
   const dep = deal.departDate ? deal.departDate.slice(0,10) : "?";
   const ret = deal.returnDate ? deal.returnDate.slice(0,10) : null;
@@ -284,7 +292,9 @@ async function sendTelegramToSubscriber(deal, ai, chatId) {
     "🏷️ " + emoji + " " + ai.label + " — Score " + ai.score + "/10\n\n" +
     "📝 _" + ai.reason + "_\n" +
     "⏰ " + ai.urgency + "\n\n" +
-    "👉 [Book on Google Flights](" + url + ")";
+    "👉 [Check price on Aviasales](" + url + ")
+" +     "🔎 [Compare on Google Flights](" + gUrl + ")
+" +     "_Cached fare, price may have changed_";
   const r = await fetch("https://api.telegram.org/bot" + process.env.TELEGRAM_BOT_TOKEN + "/sendMessage", {
     method: "POST",
     headers: { "content-type": "application/json" },
@@ -302,7 +312,8 @@ function buildEmailHtml(confirmedDeals, tier) {
     const deal = item.deal;
     const ai = item.ai;
     const emoji = ai.score >= 9 ? "🔥" : ai.score >= 7 ? "⭐" : "✅";
-    const url = buildBookingUrl(deal.origin, deal.destination, deal.departDate, deal.returnDate);
+    const url = buildAviasalesUrl(deal.origin, deal.destination, deal.departDate, deal.returnDate);   
+    const gUrl = buildBookingUrl(deal.origin, deal.destination, deal.departDate, deal.returnDate);
     const dep = deal.departDate ? deal.departDate.slice(0, 10) : "?";
     const ret = deal.returnDate ? deal.returnDate.slice(0, 10) : null;
     const baseline = BASELINES[deal.origin + "-" + deal.destination] || BASELINES.DEFAULT;
@@ -345,8 +356,11 @@ function buildEmailHtml(confirmedDeals, tier) {
       // Reason
       "<div style='padding:0 16px 16px;font-size:13px;color:#8892a4;font-style:italic'>" + ai.reason + "</div>" +
       // Book button — full width for mobile
+           "<div style='padding:0 16px 8px'>" +
+        "<a href='" + url + "' style='display:block;background:#00c2a8;color:#000000;text-align:center;padding:14px;border-radius:8px;text-decoration:none;font-weight:bold;font-size:16px'>Check price on Aviasales →</a>" +
+      "</div>" +
       "<div style='padding:0 16px 16px'>" +
-        "<a href='" + url + "' style='display:block;background:#00c2a8;color:#000000;text-align:center;padding:14px;border-radius:8px;text-decoration:none;font-weight:bold;font-size:16px'>Book Now on Google Flights →</a>" +
+        "<a href='" + gUrl + "' style='display:block;border:1px solid #00c2a8;color:#00c2a8;text-align:center;padding:12px;border-radius:8px;text-decoration:none;font-size:14px'>Compare on Google Flights</a>" +
       "</div>" +
     "</div>";
   }).join("");
