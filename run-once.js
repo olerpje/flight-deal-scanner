@@ -215,7 +215,7 @@ async function fetchCheapFlights(origin, settings) {
     try {
       const res = await fetch(url.toString());
       const json = await res.json();
-      if (!json.success) continue;
+            if (!json.success) { console.log("  [" + origin + "→" + destination + "] API returned no data"); continue; }
 
       for (const dest of Object.keys(json.data || {})) {
         const data = json.data[dest];
