@@ -370,14 +370,18 @@ function buildEmailHtml(confirmedDeals, tier) {
 }
 
 async function sendEmailToSubscriber(email, deals, tier) {
-  const html = buildEmailHtml(deals, tier);
-  await mailer.sendMail({
-    from: '"Flight Deals" <' + process.env.GMAIL_USER + ">",
-    to: email,
-    subject: "✈️ " + deals.length + " flight deal" + (deals.length > 1 ? "s" : "") + " found" + (tier === "free" ? " (free tier)" : ""),
-    html: html,
-  });
-  console.log("[EMAIL ✓] " + tier + " → " + email + " (" + deals.length + " deals)");
+  try {
+    const html = buildEmailHtml(deals, tier);
+    await mailer.sendMail({
+      from: '"Flight Deals" <' + process.env.GMAIL_USER + ">",
+      to: email,
+      subject: "✈️ " + deals.length + " flight deal" + (deals.length > 1 ? "s" : "") + " found" + (tier === "free" ? " (free tier)" : ""),
+      html: html,
+    });
+    console.log("[EMAIL ✓] " + tier + " → " + email + " (" + deals.length + " deals)");
+  } catch (e) {
+    console.error("[EMAIL ✗] " + email + ": " + e.message);
+  }
 }
 
 async function main() {
