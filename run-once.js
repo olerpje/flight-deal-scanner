@@ -64,8 +64,31 @@ const BASELINES = {
   "CGN-ATH": 125, "CGN-BCN": 72, "CGN-FCO": 80, "CGN-MAD": 128,
   "CGN-LIS": 100, "CGN-NAP": 142, "CGN-SKG": 148, "CGN-HER": 150,
     "CGN-AGP": 100, "CGN-PMO": 85,
-  DEFAULT: 140,
+   DEFAULT: 140,
 };
+
+const SCAN_MODE = process.env.SCAN_MODE || "main";
+const ERROR_MODE = SCAN_MODE === "errorfares";
+
+const AMS_EXTRA = {
+  // Europe
+  "AMS-PRG": 90, "AMS-BUD": 100, "AMS-WAW": 90, "AMS-KRK": 90, "AMS-VIE": 100,
+  "AMS-CPH": 90, "AMS-ARN": 110, "AMS-OSL": 110, "AMS-DUB": 90, "AMS-EDI": 100,
+  "AMS-MXP": 100, "AMS-VCE": 110, "AMS-IST": 190, "AMS-SOF": 110, "AMS-OTP": 120,
+  "AMS-ZAG": 130, "AMS-SPU": 160, "AMS-DBV": 170, "AMS-TFS": 200, "AMS-PMI": 130,
+  "AMS-OPO": 120, "AMS-FAO": 130, "AMS-NCE": 130, "AMS-KEF": 200, "AMS-MLA": 160,
+  // North Africa / Middle East
+  "AMS-RAK": 170, "AMS-AGA": 190, "AMS-TLV": 250, "AMS-CAI": 250, "AMS-DXB": 350,
+  // Long haul
+  "AMS-JFK": 450, "AMS-BOS": 480, "AMS-MIA": 520, "AMS-LAX": 600, "AMS-YYZ": 480,
+  "AMS-CUN": 650, "AMS-GRU": 750, "AMS-BKK": 650, "AMS-SIN": 700, "AMS-HKG": 700,
+  "AMS-NRT": 800, "AMS-ICN": 750, "AMS-DEL": 550, "AMS-CPT": 650,
+};
+Object.assign(BASELINES, AMS_EXTRA);
+
+const ERROR_DESTINATIONS = Object.keys(BASELINES)
+  .filter(function(k) { return k.startsWith("AMS-"); })
+  .map(function(k) { return k.slice(4); });
 
 function getBaseline(origin, destination) {
   const dest = destination === "ROM" ? "FCO" : destination;
@@ -204,9 +227,9 @@ const mailer = nodemailer.createTransport({
   auth: { user: process.env.GMAIL_USER, pass: process.env.GMAIL_APP_PASSWORD },
 });
 
-async function fetchCheapFlights(origin, settings) {
+async function fetchCheapFlights(origin, settings, destinations) {
   const deals = [];
-  for (const destination of DESTINATIONS) {
+  for (const destination of destinations) {
     const routeKey = origin + "-" + destination;
     const baseline = BASELINES[routeKey] || BASELINES.DEFAULT;
     const threshold = baseline * (1 - settings.discountThreshold);
@@ -403,7 +426,17 @@ async function sendEmailToSubscriber(email, deals, tier) {
 }
 
 async function main() {
-  const settings = loadSettings();
+const settings = loadSettings();
+if (ERROR_MODE) {
+  Object.assign(settings, {
+    origins: ["AMS"],
+    months: [1,2,3,4,5,6,7,8,9,10,11,12],
+    minDays: 3,
+    maxDays: 30,
+    discountThreshold: 0.45,
+  });
+}
+const destinations = ERROR_MODE ? ERROR_DESTINATIONS : DESTINATIONS;
   const monthNames = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
 
   console.log("\n✈️  Flight Deal Scanner — " + new Date().toISOString());
@@ -414,7 +447,7 @@ async function main() {
   const allDeals = [];
   for (const origin of settings.origins) {
     console.log("   Checking " + origin + "...");
-    const deals = await fetchCheapFlights(origin, settings);
+    const deals = await fetchCheapFlights(origin, settings, destinations);
     console.log("   → " + deals.length + " potential deals\n");
     allDeals.push(...deals);
     await new Promise(function(r) { setTimeout(r, 600); });
@@ -429,7 +462,7 @@ async function main() {
   for (const deal of allDeals) {
     // Step 1 — AI filter
     const ai = await validateWithClaude(deal);
-    if (!ai.isDeal) {
+    if (!ai.isDeal || (ERROR_MODE && ai.score < 7)) {
       console.log("   ✗ " + deal.origin + "→" + deal.destination + " €" + deal.price + " | score:" + ai.score);
       continue;
     }
