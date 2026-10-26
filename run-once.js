@@ -314,7 +314,7 @@ async function sendTelegramToSubscriber(deal, ai, chatId) {
   const ret = deal.returnDate ? deal.returnDate.slice(0,10) : null;
   const msg = "✈️ *FLIGHT DEAL*" + NL + NL +
     "🛫 *" + deal.origin + " → " + deal.destination + "*" + NL +
-    "💶 *€" + deal.price + "* " + (deal.transfers === 0 ? "(direct)" : "(" + deal.transfers + " stop)") + NL +
+    "💶 *€" + deal.price + "*" + (stopsLabel(deal.transfers) ? " (" + stopsLabel(deal.transfers) + ")" : "") + NL +
     "📅 " + dep + (ret ? " → " + ret : "") + (deal.tripDays ? " (" + deal.tripDays + "d)" : "") + NL +
     "✈️ " + deal.airline + NL +
     "🏷️ " + emoji + " " + ai.label + " — Score " + ai.score + "/10" + NL + NL +
@@ -334,80 +334,137 @@ async function sendTelegramToSubscriber(deal, ai, chatId) {
 }
 // ─── MOBILE-FRIENDLY EMAIL ────────────────────────────────────────────────────
 
+// ─── EMAIL TEMPLATE (table-based, works in Gmail/Outlook/Apple Mail) ─────────
+// Replace the whole old buildEmailHtml() in run-once.js with everything below.
+
+const AIRLINES = {
+  FR: "Ryanair", U2: "easyJet", W6: "Wizz Air", KL: "KLM", HV: "Transavia",
+  TO: "Transavia France", LH: "Lufthansa", EW: "Eurowings", VY: "Vueling",
+  IB: "Iberia", TP: "TAP Portugal", A3: "Aegean", SN: "Brussels Airlines",
+  AF: "Air France", BA: "British Airways", DY: "Norwegian", LX: "Swiss",
+  OS: "Austrian", SK: "SAS", AZ: "ITA Airways", PC: "Pegasus", TK: "Turkish Airlines",
+};
+
+function airlineName(code) {
+  if (!code) return "";
+  return AIRLINES[code] || code;
+}
+
+// Travelpayouts often returns no "transfers" field -> return null so we hide it
+function stopsLabel(t) {
+  if (t === 0) return "Direct";
+  if (t === 1) return "1 stop";
+  if (typeof t === "number" && t > 1) return t + " stops";
+  return null;
+}
+
+// "2026-11-27T..." -> "Fri 27 Nov"
+function fmtDate(iso) {
+  if (!iso) return "?";
+  const d = new Date(iso.slice(0, 10) + "T12:00:00Z");
+  return d.toLocaleDateString("en-GB", { weekday: "short", day: "numeric", month: "short", timeZone: "UTC" }).replace(",", "");
+}
+
+// "Sun 25 Oct, 16:55" in Amsterdam time
+function fmtNow() {
+  const d = new Date();
+  const date = d.toLocaleDateString("en-GB", { weekday: "short", day: "numeric", month: "short", timeZone: "Europe/Amsterdam" }).replace(",", "");
+  const time = d.toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit", timeZone: "Europe/Amsterdam" });
+  return date + ", " + time;
+}
+
+function infoCell(label, value, isLast) {
+  return "<td valign='top' style='padding-right:" + (isLast ? "0" : "28px") + ";white-space:nowrap'>" +
+    "<div style='font-size:10px;color:#6b7686;text-transform:uppercase;letter-spacing:0.1em;margin-bottom:3px'>" + label + "</div>" +
+    "<div style='font-size:15px;color:#e8e4d9;font-weight:600'>" + value + "</div>" +
+    "</td>";
+}
+
 function buildEmailHtml(confirmedDeals, tier) {
+  const FONT = "-apple-system,'Segoe UI',Roboto,Arial,sans-serif";
+
   const cards = confirmedDeals.map(function(item) {
     const deal = item.deal;
     const ai = item.ai;
     const emoji = ai.score >= 9 ? "🔥" : ai.score >= 7 ? "⭐" : "✅";
-    const url = buildAviasalesUrl(deal.origin, deal.destination, deal.departDate, deal.returnDate);   
+    const url = buildAviasalesUrl(deal.origin, deal.destination, deal.departDate, deal.returnDate);
     const gUrl = buildBookingUrl(deal.origin, deal.destination, deal.departDate, deal.returnDate);
-    const dep = deal.departDate ? deal.departDate.slice(0, 10) : "?";
-    const ret = deal.returnDate ? deal.returnDate.slice(0, 10) : null;
     const baseline = getBaseline(deal.origin, deal.destination);
-    const savings = baseline - deal.price;
+    const savings = Math.round(baseline - deal.price);
     const labelColor = ai.score >= 9 ? "#ec4899" : ai.score >= 7 ? "#f97316" : "#00c2a8";
     const borderColor = ai.score >= 9 ? "#ec489940" : ai.score >= 7 ? "#f9731640" : "#00c2a840";
 
-    return "<div style='background:#0d1117;border:1px solid " + borderColor + ";border-radius:12px;margin-bottom:16px;overflow:hidden'>" +
-      // Header row
-      "<div style='padding:16px 16px 12px;display:flex;justify-content:space-between;align-items:flex-start'>" +
-        "<div>" +
-          "<div style='font-size:20px;font-weight:bold;color:#ffffff'>" + deal.origin + " → " + deal.destination + "</div>" +
-          "<div style='font-size:12px;color:#8892a4;margin-top:2px'>" + deal.airline + " · " + (deal.transfers === 0 ? "Direct" : deal.transfers + " stop") + "</div>" +
-        "</div>" +
-        "<div style='text-align:right'>" +
-          "<div style='font-size:28px;font-weight:bold;color:#00c2a8'>€" + deal.price + "</div>" +
-          (savings > 0 ? "<div style='font-size:11px;color:#7c6ff7'>save ~€" + savings + "</div>" : "") +
-        "</div>" +
-      "</div>" +
-      // Dates row
-      "<div style='padding:0 16px 12px;display:flex;gap:24px'>" +
-        "<div>" +
-          "<div style='font-size:10px;color:#4a5568;text-transform:uppercase;letter-spacing:0.1em;margin-bottom:2px'>Departure</div>" +
-          "<div style='font-size:14px;color:#e8e4d9;font-weight:600'>" + dep + "</div>" +
-        "</div>" +
-        (ret ? "<div>" +
-          "<div style='font-size:10px;color:#4a5568;text-transform:uppercase;letter-spacing:0.1em;margin-bottom:2px'>Return</div>" +
-          "<div style='font-size:14px;color:#e8e4d9;font-weight:600'>" + ret + "</div>" +
-        "</div>" : "") +
-        (deal.tripDays ? "<div>" +
-          "<div style='font-size:10px;color:#4a5568;text-transform:uppercase;letter-spacing:0.1em;margin-bottom:2px'>Duration</div>" +
-          "<div style='font-size:14px;color:#e8e4d9;font-weight:600'>" + deal.tripDays + " days</div>" +
-        "</div>" : "") +
-      "</div>" +
-      // Label + urgency
-      "<div style='padding:0 16px 16px;display:flex;align-items:center;gap:10px'>" +
-        "<span style='background:" + labelColor + "20;border:1px solid " + labelColor + ";color:" + labelColor + ";padding:4px 10px;border-radius:6px;font-size:12px;font-weight:bold'>" + emoji + " " + ai.label + "</span>" +
-        "<span style='font-size:12px;color:#5a6474'>⏰ " + ai.urgency + "</span>" +
-      "</div>" +
+    const subParts = [airlineName(deal.airline), stopsLabel(deal.transfers)].filter(Boolean);
+    const subLine = subParts.join(" · ");
+
+    const infoCells = [infoCell("Departure", fmtDate(deal.departDate), !deal.returnDate && !deal.tripDays)];
+    if (deal.returnDate) infoCells.push(infoCell("Return", fmtDate(deal.returnDate), !deal.tripDays));
+    if (deal.tripDays) infoCells.push(infoCell("Duration", deal.tripDays + (deal.tripDays === 1 ? " day" : " days"), true));
+
+    return "<table role='presentation' width='100%' cellpadding='0' cellspacing='0' border='0' style='background:#0d1117;border:1px solid " + borderColor + ";border-radius:12px;border-collapse:separate;margin-bottom:16px'>" +
+
+      // Route (left) + price (right)
+      "<tr><td style='padding:18px 18px 14px'>" +
+        "<table role='presentation' width='100%' cellpadding='0' cellspacing='0' border='0'><tr>" +
+          "<td valign='top' style='font-family:" + FONT + "'>" +
+            "<div style='font-size:20px;font-weight:700;color:#ffffff;white-space:nowrap'>" + deal.origin + " → " + deal.destination + "</div>" +
+            (subLine ? "<div style='font-size:12px;color:#8892a4;margin-top:4px'>" + subLine + "</div>" : "") +
+          "</td>" +
+          "<td valign='top' align='right' style='font-family:" + FONT + ";padding-left:12px'>" +
+            "<div style='font-size:28px;font-weight:700;color:#00c2a8;white-space:nowrap;line-height:1'>€" + Math.round(deal.price) + "</div>" +
+            (savings > 0 ? "<div style='font-size:11px;color:#6b7686;margin-top:6px;white-space:nowrap'>save ~€" + savings + "</div>" : "") +
+          "</td>" +
+        "</tr></table>" +
+      "</td></tr>" +
+
+      // Dates
+      "<tr><td style='padding:0 18px 16px;font-family:" + FONT + "'>" +
+        "<table role='presentation' cellpadding='0' cellspacing='0' border='0'><tr>" + infoCells.join("") + "</tr></table>" +
+      "</td></tr>" +
+
+      // Badge + urgency
+      "<tr><td style='padding:0 18px 14px;font-family:" + FONT + "'>" +
+        "<span style='display:inline-block;background:" + labelColor + "20;border:1px solid " + labelColor + ";color:" + labelColor + ";padding:4px 10px;border-radius:6px;font-size:12px;font-weight:700'>" + emoji + " " + ai.label + "</span>" +
+        (ai.urgency ? "<div style='font-size:12px;color:#8892a4;margin-top:8px'>⏰ " + ai.urgency + "</div>" : "") +
+      "</td></tr>" +
+
       // Reason
-      "<div style='padding:0 16px 16px;font-size:13px;color:#8892a4;font-style:italic'>" + ai.reason + "</div>" +
-      // Book button — full width for mobile
-           "<div style='padding:0 16px 8px'>" +
-        "<a href='" + url + "' style='display:block;background:#00c2a8;color:#000000;text-align:center;padding:14px;border-radius:8px;text-decoration:none;font-weight:bold;font-size:16px'>Check price on Aviasales →</a>" +
-      "</div>" +
-      "<div style='padding:0 16px 16px'>" +
-        "<a href='" + gUrl + "' style='display:block;border:1px solid #00c2a8;color:#00c2a8;text-align:center;padding:12px;border-radius:8px;text-decoration:none;font-size:14px'>Compare on Google Flights</a>" +
-      "</div>" +
-    "</div>";
+      "<tr><td style='padding:0 18px 18px;font-family:" + FONT + ";font-size:13px;line-height:1.5;color:#8892a4;font-style:italic'>" + ai.reason + "</td></tr>" +
+
+      // Buttons
+      "<tr><td style='padding:0 18px 10px'>" +
+        "<a href='" + url + "' style='display:block;background:#00c2a8;color:#000000;text-align:center;padding:14px;border-radius:8px;text-decoration:none;font-family:" + FONT + ";font-weight:700;font-size:16px'>Check price on Aviasales →</a>" +
+      "</td></tr>" +
+      "<tr><td style='padding:0 18px 18px'>" +
+        "<a href='" + gUrl + "' style='display:block;border:1px solid #00c2a8;color:#00c2a8;text-align:center;padding:12px;border-radius:8px;text-decoration:none;font-family:" + FONT + ";font-size:14px'>Compare on Google Flights</a>" +
+      "</td></tr>" +
+
+      // Cached-fare warning
+      "<tr><td style='padding:0 18px 16px;font-family:" + FONT + ";font-size:11px;color:#6b7686;text-align:center'>Cached fare, price may have changed</td></tr>" +
+    "</table>";
   }).join("");
 
   const freeNote = tier === "free"
-    ? "<div style='background:#f9731610;border:1px solid #f9731640;border-radius:10px;padding:14px 16px;margin-bottom:20px;font-size:13px;color:#f97316'>⏰ <strong>Free tier — 24h delayed.</strong> <a href='https://olerpje.github.io/flight-deal-scanner/signup.html' style='color:#f97316;font-weight:bold'>Upgrade to Premium (€9/mo)</a> for instant alerts + Telegram.</div>"
+    ? "<div style='background:#f9731610;border:1px solid #f9731640;border-radius:10px;padding:14px 16px;margin-bottom:20px;font-family:" + FONT + ";font-size:13px;color:#f97316'>⏰ <strong>Free tier — 24h delayed.</strong> <a href='https://olerpje.github.io/flight-deal-scanner/signup.html' style='color:#f97316;font-weight:bold'>Upgrade to Premium (€9/mo)</a> for instant alerts + Telegram.</div>"
     : "";
 
-  return "<!DOCTYPE html><html><head><meta name='viewport' content='width=device-width,initial-scale=1'></head>" +
-    "<body style='margin:0;padding:0;background:#0a0a0f;font-family:Arial,sans-serif'>" +
-    "<div style='max-width:600px;margin:0 auto;padding:24px 16px'>" +
-    "<div style='font-size:10px;letter-spacing:0.3em;color:#00c2a8;text-transform:uppercase;margin-bottom:8px'>Flight Deal Scanner</div>" +
-    "<h1 style='font-size:24px;color:#e8e4d9;margin:0 0 4px'>✈️ " + confirmedDeals.length + " Deal" + (confirmedDeals.length > 1 ? "s" : "") + " Found</h1>" +
-    "<p style='color:#8892a4;font-size:12px;margin:0 0 20px'>" + new Date().toUTCString() + "</p>" +
-    freeNote +
-    cards +
-    "<div style='color:#4a5568;font-size:11px;text-align:center;margin-top:8px'>" +
-    "Flight Deal Scanner · <a href='https://olerpje.github.io/flight-deal-scanner/signup.html' style='color:#00c2a8'>Manage subscription</a>" +
-    "</div>" +
-    "</div></body></html>";
+  const n = confirmedDeals.length;
+
+  return "<!DOCTYPE html><html><head><meta charset='utf-8'><meta name='viewport' content='width=device-width,initial-scale=1'><meta name='color-scheme' content='dark'></head>" +
+    "<body style='margin:0;padding:0;background:#0a0a0f;font-family:" + FONT + "'>" +
+    "<table role='presentation' width='100%' cellpadding='0' cellspacing='0' border='0' style='background:#0a0a0f'><tr><td align='center' style='padding:24px 16px'>" +
+      "<table role='presentation' width='100%' cellpadding='0' cellspacing='0' border='0' style='max-width:560px'><tr><td>" +
+        "<div style='font-family:" + FONT + ";font-size:10px;letter-spacing:0.3em;color:#00c2a8;text-transform:uppercase;margin-bottom:8px'>Flight Deal Scanner</div>" +
+        "<h1 style='font-family:" + FONT + ";font-size:24px;color:#e8e4d9;margin:0 0 4px'>✈️ " + n + " Deal" + (n > 1 ? "s" : "") + " Found</h1>" +
+        "<p style='font-family:" + FONT + ";color:#8892a4;font-size:12px;margin:0 0 20px'>" + fmtNow() + "</p>" +
+        freeNote +
+        cards +
+        "<div style='font-family:" + FONT + ";color:#6b7686;font-size:11px;text-align:center;margin-top:8px'>" +
+          "Flight Deal Scanner · <a href='https://olerpje.github.io/flight-deal-scanner/signup.html' style='color:#00c2a8'>Manage subscription</a>" +
+        "</div>" +
+      "</td></tr></table>" +
+    "</td></tr></table>" +
+    "</body></html>";
 }
 
 async function sendEmailToSubscriber(email, deals, tier) {
