@@ -43,7 +43,7 @@ const DEFAULTS = {
 const DESTINATIONS = ["ATH", "SKG", "HER", "FCO", "NAP", "PMO", "BCN", "MAD", "AGP", "LIS"];
 
 const BASELINES = {
-  "AMS-ATH": 175, "AMS-BCN": 115, "AMS-FCO": 140, "AMS-MAD": 110,
+  "AMS-ATH": 175, "AMS-BCN": 105, "AMS-FCO": 140, "AMS-MAD": 110,
   "AMS-LIS": 160, "AMS-NAP": 150, "AMS-PMO": 175, "AMS-HER": 180,
   "AMS-SKG": 175, "AMS-AGP": 95,
   "EIN-ATH": 125, "EIN-BCN": 130, "EIN-MAD": 125, "EIN-FCO": 95,
@@ -51,11 +51,11 @@ const BASELINES = {
   "EIN-LIS": 95, "EIN-PMO": 150,
   "BRU-ATH": 95, "BRU-BCN": 85,  "BRU-FCO": 90,  "BRU-MAD": 80,
   "BRU-LIS": 80,  "BRU-NAP": 95,  "BRU-HER": 110, "BRU-SKG": 110,
-  "BRU-AGP": 88,  "BRU-PMO": 95,
+  "BRU-AGP": 80,  "BRU-PMO": 95,
   "CRL-ATH": 105, "CRL-BCN": 75,  "CRL-FCO": 82,  "CRL-MAD": 72,
   "CRL-LIS": 80,  "CRL-NAP": 85,  "CRL-HER": 100, "CRL-SKG": 100,
   "CRL-AGP": 78,  "CRL-PMO": 95,
-  "FRA-ATH": 140, "FRA-BCN": 50, "FRA-FCO": 55, "FRA-MAD": 92,
+  "FRA-ATH": 110, "FRA-BCN": 50, "FRA-FCO": 55, "FRA-MAD": 92,
   "FRA-LIS": 115, "FRA-NAP": 115, "FRA-SKG": 165, "FRA-HER": 170,
   "FRA-AGP": 120, "FRA-PMO": 63,
   "DUS-ATH": 132, "DUS-BCN": 80, "DUS-FCO": 108, "DUS-MAD": 95,
