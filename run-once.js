@@ -43,13 +43,13 @@ const DEFAULTS = {
 const DESTINATIONS = ["ATH", "SKG", "HER", "FCO", "NAP", "PMO", "BCN", "MAD", "AGP", "LIS"];
 
 const BASELINES = {
-  "AMS-ATH": 175, "AMS-BCN": 105, "AMS-FCO": 140, "AMS-MAD": 110,
+  "AMS-ATH": 155, "AMS-BCN": 105, "AMS-FCO": 140, "AMS-MAD": 110,
   "AMS-LIS": 160, "AMS-NAP": 130, "AMS-PMO": 175, "AMS-HER": 180,
   "AMS-SKG": 175, "AMS-AGP": 95,
   "EIN-ATH": 125, "EIN-BCN": 130, "EIN-MAD": 125, "EIN-FCO": 95,
   "EIN-SKG": 148, "EIN-HER": 152, "EIN-NAP": 112, "EIN-AGP": 60,
   "EIN-LIS": 95, "EIN-PMO": 150,
-  "BRU-ATH": 95, "BRU-BCN": 85,  "BRU-FCO": 90,  "BRU-MAD": 80,
+  "BRU-ATH": 95, "BRU-BCN": 85,  "BRU-FCO": 90,  "BRU-MAD": 70,
   "BRU-LIS": 80,  "BRU-NAP": 95,  "BRU-HER": 110, "BRU-SKG": 110,
   "BRU-AGP": 80,  "BRU-PMO": 85,
   "CRL-ATH": 105, "CRL-BCN": 75,  "CRL-FCO": 82,  "CRL-MAD": 62,
