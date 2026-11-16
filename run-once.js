@@ -229,6 +229,14 @@ const mailer = nodemailer.createTransport({
 
 async function fetchCheapFlights(origin, settings, destinations) {
   const deals = [];
+  const stats = { seen: 0, month: 0, days: 0, price: 0 };
+ stats.seen++;
+if (!settings.months.includes(depMonth)) { stats.month++; continue; }
+const tripDays = daysBetween(flight.departure_at, flight.return_at);
+if (tripDays !== null && (tripDays < settings.minDays || tripDays > settings.maxDays)) { stats.days++; continue; }
+if (flight.price > threshold) { stats.price++; continue; }async function fetchCheapFlights(origin, settings, destinations) {
+  const deals = [];
+  const stats = { seen: 0, month: 0, days: 0, price: 0 };
   for (const destination of destinations) {
     const routeKey = origin + "-" + destination;
     const baseline = BASELINES[routeKey] || BASELINES.DEFAULT;
@@ -243,17 +251,18 @@ async function fetchCheapFlights(origin, settings, destinations) {
     try {
       const res = await fetch(url.toString());
       const json = await res.json();
-            if (!json.success) { console.log("  [" + origin + "→" + destination + "] API returned no data"); continue; }
+      if (!json.success) { console.log("  [" + origin + "→" + destination + "] API returned no data"); continue; }
 
       for (const dest of Object.keys(json.data || {})) {
         const data = json.data[dest];
         for (const key of Object.keys(data)) {
           const flight = data[key];
+          stats.seen++;
           const depMonth = new Date(flight.departure_at).getMonth() + 1;
-          if (!settings.months.includes(depMonth)) continue;
+          if (!settings.months.includes(depMonth)) { stats.month++; continue; }
           const tripDays = daysBetween(flight.departure_at, flight.return_at);
-          if (tripDays !== null && (tripDays < settings.minDays || tripDays > settings.maxDays)) continue;
-          if (flight.price > threshold) continue;
+          if (tripDays !== null && (tripDays < settings.minDays || tripDays > settings.maxDays)) { stats.days++; continue; }
+          if (flight.price > threshold) { stats.price++; continue; }
           console.log("  [" + origin + "→" + dest + "] €" + flight.price + " | " + (flight.departure_at ? flight.departure_at.slice(0,10) : "?") + " → " + (flight.return_at ? flight.return_at.slice(0,10) : "?") + " (" + tripDays + "d)");
           deals.push({
             origin: origin, destination: dest, price: flight.price,
@@ -267,6 +276,7 @@ async function fetchCheapFlights(origin, settings, destinations) {
     }
     await new Promise(function(r) { setTimeout(r, 300); });
   }
+  console.log("   stats " + origin + ": " + JSON.stringify(stats));
   return deals;
 }
 
@@ -483,16 +493,15 @@ async function sendEmailToSubscriber(email, deals, tier) {
 }
 
 async function main() {
-const settings = loadSettings();
-if (ERROR_MODE) {
-  Object.assign(settings, {
-    origins: ["AMS"],
-    months: [1,2,3,4,5,6,7,8,9,10,11,12],
-    minDays: 3,
-    maxDays: 30,
-    discountThreshold: 0.45,
-  });
-}
+  const settings = loadSettings();
+  if (ERROR_MODE) {
+    Object.assign(settings, {
+      origins: ["AMS"],
+      minDays: 3,
+      maxDays: 21,
+      discountThreshold: 0.45,
+    });
+  }
 const destinations = ERROR_MODE ? ERROR_DESTINATIONS : DESTINATIONS;
   const monthNames = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
 
@@ -519,7 +528,7 @@ const destinations = ERROR_MODE ? ERROR_DESTINATIONS : DESTINATIONS;
   for (const deal of allDeals) {
     // Step 1 — AI filter
     const ai = await validateWithClaude(deal);
-    if (!ai.isDeal || (ERROR_MODE && ai.score < 7)) {
+    if (!ai.isDeal || (ERROR_MODE && ai.score < 5)) {
       console.log("   ✗ " + deal.origin + "→" + deal.destination + " €" + deal.price + " | score:" + ai.score);
       continue;
     }
