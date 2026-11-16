@@ -230,13 +230,6 @@ const mailer = nodemailer.createTransport({
 async function fetchCheapFlights(origin, settings, destinations) {
   const deals = [];
   const stats = { seen: 0, month: 0, days: 0, price: 0 };
- stats.seen++;
-if (!settings.months.includes(depMonth)) { stats.month++; continue; }
-const tripDays = daysBetween(flight.departure_at, flight.return_at);
-if (tripDays !== null && (tripDays < settings.minDays || tripDays > settings.maxDays)) { stats.days++; continue; }
-if (flight.price > threshold) { stats.price++; continue; }async function fetchCheapFlights(origin, settings, destinations) {
-  const deals = [];
-  const stats = { seen: 0, month: 0, days: 0, price: 0 };
   for (const destination of destinations) {
     const routeKey = origin + "-" + destination;
     const baseline = BASELINES[routeKey] || BASELINES.DEFAULT;
